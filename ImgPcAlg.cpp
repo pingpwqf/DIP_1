@@ -1,70 +1,88 @@
 #include "ImgPcAlg.h"
+
 #include <QDebug>
 
-void BaseAlg::downsample()
+// --- 基础工具实现 ---
+
+void AlgInterface::CheckAlg() const
 {
-    cv::resize(refImg, downRef, cv::Size(refImg.cols / factor, refImg.rows / factor), 0, 0, cv::INTER_AREA);
+    if(!name.isEmpty()) qDebug() << name;
+    else qDebug() << "this algorithm is not expected to own a name";
 }
 
-double MSVAlg::process(const cv::Mat& inputImg) const
-{
-    if(refImg.size() != inputImg.size()) {
-        throw std::invalid_argument("Input image size does not match reference image size.");
+BaseAlg::BaseAlg(cv::InputArray img, int f) : m_factor(std::max(1, f)) {
+    if (img.empty()) throw std::invalid_argument("Reference image is empty.");
+
+    // 使用 CV_32F 确保精度，这对后续计算至关重要
+    img.getUMat().convertTo(m_refImg, CV_32F);
+    downsample(m_refImg, m_downRef);
+}
+
+void BaseAlg::validate(const cv::UMat& input) const {
+    if (input.empty() || input.size() != m_refImg.size())
+        throw std::invalid_argument("Input size mismatch.");
+}
+
+void BaseAlg::downsample(const cv::UMat& src, cv::UMat& dst) const {
+    if (m_factor > 1) {
+        // INTER_AREA 是下采样最好的插值方式，避免波纹效应
+        cv::resize(src, dst, cv::Size(src.cols / m_factor, src.rows / m_factor), 0, 0, cv::INTER_AREA);
     }
-    return cv::norm(refImg, inputImg, cv::NORM_L1);
-}
-
-void MSVAlg::checkAlg() const
-{
-    qDebug() << "MSV";
-}
-
-double NIPCAlg::process(const cv::Mat& inputImg) const
-{
-    if(refImg.size() != inputImg.size()) {
-        throw std::invalid_argument("Input image size does not match reference image size.");
+    else {
+        src.copyTo(dst);
     }
-    cv::Mat result, downImg;
-    cv::resize(inputImg, downImg, cv::Size(inputImg.cols / factor, inputImg.rows / factor), 0, 0, cv::INTER_AREA);
-    cv::matchTemplate(downRef, downImg, result, cv::TM_CCORR_NORMED);
-    return static_cast<double>(result.at<float>(0, 0));
 }
 
-void NIPCAlg::checkAlg() const
-{
-    qDebug() << "NIPC";
-}
-
-double ZNCCAlg::process(const cv::Mat& inputImg) const
-{
-    if(refImg.size() != inputImg.size()) {
-        throw std::invalid_argument("Input image size does not match reference image size.");
+cv::UMat BaseAlg::prepareInput(cv::InputArray input) const {
+    cv::UMat in = input.getUMat();
+    validate(in);
+    if (in.type() != CV_32F) {
+        in.convertTo(in, CV_32F);
     }
-    cv::Mat result, downImg;
-    cv::resize(inputImg, downImg, cv::Size(inputImg.cols / factor, inputImg.rows / factor), 0, 0, cv::INTER_AREA);
-    cv::matchTemplate(downRef, downImg, result, cv::TM_CCOEFF_NORMED);
-    return static_cast<double>(result.at<float>(0, 0));
+    return in;
 }
 
-void ZNCCAlg::checkAlg() const
-{
-    qDebug() << "ZNCC";
+// --- 具体算法 (NIPC, ZNCC, MSV) ---
+
+NIPCAlg::NIPCAlg(cv::InputArray img, int f) : BaseAlg(img, f) {
+    name = NIPCNAME;
+    m_refNorm = cv::norm(m_downRef, cv::NORM_L2);
+    if (m_refNorm < 1e-9) throw std::runtime_error("Reference image has zero norm (black image?).");
 }
 
-std::unique_ptr<BaseAlg> createMSVAlgProcessor(cv::Mat image)
-{
-    std::unique_ptr<BaseAlg> BasePtr = std::make_unique<MSVAlg>(image);
-    return std::move(BasePtr);
+double NIPCAlg::process(cv::InputArray input) const {
+    cv::UMat inDown;
+    downsample(prepareInput(input), inDown);
+
+    double inNorm = cv::norm(inDown, cv::NORM_L2);
+    // 避免除以零
+    if (inNorm < 1e-9) return 0.0;
+
+    // dot product
+    return m_downRef.dot(inDown) / (m_refNorm * inNorm);
 }
 
-std::unique_ptr<BaseAlg> createNIPCAlgProcessor(cv::Mat image)
-{
-    std::unique_ptr<BaseAlg> BasePtr = std::make_unique<NIPCAlg>(image);
-    return std::move(BasePtr);
+double ZNCCAlg::process(cv::InputArray input) const {
+    cv::UMat inputImg = prepareInput(input);
+    cv::UMat downInput;
+    downsample(inputImg, downInput);
+
+    // 输入图也需要减均值吗？标准的 ZNCC 公式通常在 matchTemplate 内部处理了归一化
+    // TM_CCOEFF_NORMED 内部会处理均值移除和方差归一化
+
+    cv::UMat result;
+    cv::matchTemplate(downInput, m_downRef, result, cv::TM_CCOEFF_NORMED);
+
+    // 优化：仅在必要时从 GPU 下载数据
+    float score = 0;
+    result.copyTo(cv::Mat(1, 1, CV_32F, &score));
+
+    // 边界处理：如果输入是纯色图，结果可能是 NaN
+    return std::isnan(score) ? 0.0 : static_cast<double>(score);
 }
 
-std::unique_ptr<BaseAlg> createZNCCAlgProcessor(cv::Mat image)
-{
-    std::unique_ptr<BaseAlg> BasePtr = std::make_unique<ZNCCAlg>(image);
-    return std::move(BasePtr);
+double MSVAlg::process(cv::InputArray input) const {
+    cv::UMat in = prepareInput(input);
+    // 使用 L1 范数代替循环，极大提升速度
+    return cv::norm(m_refImg, in, cv::NORM_L1) / static_cast<double>(m_refImg.total());
 }

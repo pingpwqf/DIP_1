@@ -1,66 +1,142 @@
 #pragma once
 #include <opencv2/opencv.hpp>
+#include <QString>
 
-class BaseAlg
-{
-protected:
-    cv::Mat refImg;
+QString MSVNAME = "MSV",
+    NIPCNAME = "NIPC",
+    ZNCCNAME = "ZNCC",
+    CORRNAME = "GLCMcorr",
+    HOMONAME = "GLCMhomo";
 
-    int factor = 2;
-    cv::Mat downRef;
-    void downsample();
+// 策略枚举：控制图像预处理的缩放行为
+enum class ScaleStrategy {
+    None,
+    ToPowerOfTwo,      // 下采样至最近的 2 的幂次 (你的需求)
+    ByFactor       // 按指定因子缩放
+};
 
+// 接口层
+class AlgInterface {
 public:
-    BaseAlg(const cv::Mat img) : refImg(img) {};
-    BaseAlg() = default;
+    virtual ~AlgInterface() = default;
+    virtual double process(cv::InputArray input) const = 0;
+    virtual double process() const = 0;
+    bool expectInput() const { return m_processInput; }
+    void CheckAlg() const;
+
+protected:
+    AlgInterface() = default;
+    bool m_processInput = true;
+    QString name;
+};
+
+class BaseAlg : public AlgInterface {
+public:
+    BaseAlg(const BaseAlg&) = delete;
+    BaseAlg& operator=(const BaseAlg&) = delete;
     virtual ~BaseAlg() = default;
 
-    BaseAlg(const BaseAlg&) = delete;
-    BaseAlg operator=(const BaseAlg&) = delete;
+    void validate(const cv::UMat& input) const;
+    double process(cv::InputArray input) const override = 0;
+    double process() const override {
+        throw std::logic_error("This algorithm requires an input image.");
+    }
 
-    virtual double process(const cv::Mat&) const = 0;
-    virtual void checkAlg() const = 0;
+protected:
+    explicit BaseAlg(cv::InputArray img, int f = 2);
+
+    // 增加 const 正确性与引用传递
+    void downsample(const cv::UMat& src, cv::UMat& dst) const;
+    cv::UMat prepareInput(cv::InputArray input) const;
+
+    int m_factor;
+    cv::UMat m_refImg;
+    cv::UMat m_downRef;
 };
 
 class MSVAlg : public BaseAlg
 {
 public:
-    MSVAlg() = default;
-    MSVAlg(const cv::Mat img) : BaseAlg(img) {};
-    virtual ~MSVAlg() = default;
-    MSVAlg(const MSVAlg&) = delete;
-    MSVAlg operator=(const MSVAlg&) = delete;
-    virtual double process(const cv::Mat& input) const override;
-    virtual void checkAlg() const override;
+    explicit MSVAlg(cv::InputArray img, int f = 2) :BaseAlg(img, f) {
+        name = MSVNAME;
+    }
+    double process(cv::InputArray input) const override;
 };
 
 class NIPCAlg : public BaseAlg
 {
 public:
-    NIPCAlg() = default;
-    NIPCAlg(const cv::Mat img) : BaseAlg(img) {
-        downsample();
-    };
-    virtual ~NIPCAlg() = default;
-    NIPCAlg(const NIPCAlg&) = delete;
-    NIPCAlg operator=(const NIPCAlg&) = delete;
-    virtual double process(const cv::Mat& input) const override;
-    virtual void checkAlg() const override;
+    NIPCAlg(cv::InputArray img, int f = 2);
+    double process(cv::InputArray input) const override;
+private:
+    double m_refNorm;
 };
 
 class ZNCCAlg : public BaseAlg
 {
 public:
-    ZNCCAlg() = default;
-    ZNCCAlg(const cv::Mat img) : BaseAlg(img) {
-        downsample();
-    };
-    virtual ~ZNCCAlg() = default;
-    ZNCCAlg(const ZNCCAlg&) = delete;
-    ZNCCAlg operator=(const ZNCCAlg&) = delete;
-    virtual double process(const cv::Mat& input) const override;
-    virtual void checkAlg() const override;
+    explicit ZNCCAlg(cv::InputArray img, int f = 2) :BaseAlg(img, f) {
+        name = ZNCCNAME;
+    }
+    double process(cv::InputArray input) const override;
 };
+
+// GLCM 模块
+namespace GLCM {
+
+// 辅助工具：处理尺寸调整
+class ImageResizer {
+public:
+    // 核心功能：根据策略调整图像大小
+    static void process(const cv::UMat& src, cv::UMat& dst, ScaleStrategy strategy);
+};
+
+class GLCmat {
+public:
+    // 构造函数增加 resizeStrategy 选项
+    GLCmat(cv::InputArray img, int levels, int dx, int dy);
+
+    double getCorrelation() const;
+    double getHomogeneity() const;
+
+private:
+    cv::Mat m_glcm;
+    int m_levels;
+    double m_meanX = 0, m_meanY = 0;
+    double m_varX = 0, m_varY = 0;
+
+    void computeParallel(const cv::Mat& img, int dx, int dy);
+    void computeStatistics(); // 将统计计算独立出来
+};
+
+class GLCMAlg : public AlgInterface {
+public:
+    // 增加策略参数，默认使用 PowerOfTwo 以提升大图的 DFT 速度
+    GLCMAlg(cv::InputArray img, int levels, int dx, int dy, ScaleStrategy strategy = ScaleStrategy::ToPowerOfTwo);
+
+    double process(cv::InputArray) const final {
+        throw std::logic_error("This algorithm uses pre-calculated reference.");
+    }
+    virtual double process() const override = 0;
+
+protected:
+    std::unique_ptr<GLCmat> m_glcmPtr;
+};
+
+class GLCMcorrAlg final : public GLCMAlg {
+public:
+    explicit GLCMcorrAlg(cv::InputArray img, int levels, int dx, int dy, ScaleStrategy strategy)
+        : GLCMAlg(img, levels, dx, dy, strategy){name = CORRNAME;}
+    double process() const override { return m_glcmPtr->getCorrelation(); }
+};
+
+class GLCMhomoAlg final : public GLCMAlg {
+public:
+    explicit GLCMhomoAlg(cv::InputArray img, int levels, int dx, int dy, ScaleStrategy strategy)
+        : GLCMAlg(img, levels, dx, dy, strategy){name = HOMONAME;}
+    double process() const override { return m_glcmPtr->getHomogeneity(); }
+};
+}
 
 std::unique_ptr<BaseAlg> createMSVAlgProcessor(cv::Mat);
 std::unique_ptr<BaseAlg> createNIPCAlgProcessor(cv::Mat);

@@ -15,6 +15,7 @@ qt_add_executable(DIP_1_1
     mainwindow.ui
     ImgPcAlg.h
     ImgPcAlg.cpp
+    ImgPcAlg_2.cpp
 
 
 )
