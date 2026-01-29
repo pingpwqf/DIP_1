@@ -1,6 +1,8 @@
 #pragma once
 #include <opencv2/opencv.hpp>
 #include <QString>
+#include <QVector>
+#include <memory>
 
 QString MSVNAME = "MSV",
     NIPCNAME = "NIPC",
@@ -138,6 +140,25 @@ public:
 };
 }
 
-std::unique_ptr<BaseAlg> createMSVAlgProcessor(cv::Mat);
-std::unique_ptr<BaseAlg> createNIPCAlgProcessor(cv::Mat);
-std::unique_ptr<BaseAlg> createZNCCAlgProcessor(cv::Mat);
+class AlgRegistry
+{
+public:
+    using Creator = std::function<std::unique_ptr<AlgInterface>(cv::InputArray)>;
+
+    static AlgRegistry instance()
+    {
+        static AlgRegistry reg;
+        return reg;
+    }
+    void Register(QString a_name, Creator creator)
+    {
+        storage[a_name] = creator;
+    }
+    std::unique_ptr<AlgInterface> get(QString a_name, cv::InputArray img){
+        if(storage.find(a_name) != storage.end()) return storage[a_name](img);
+        return nullptr;
+    }
+
+private:
+    std::unordered_map<QString, Creator> storage;
+};
