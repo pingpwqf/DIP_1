@@ -4,7 +4,7 @@
 
 // --- 基础工具实现 ---
 
-void AlgInterface::CheckAlg() const
+void AlgInterface::checkAlg() const
 {
     if(!name.isEmpty()) qDebug() << name;
     else qDebug() << "this algorithm is not expected to own a name";

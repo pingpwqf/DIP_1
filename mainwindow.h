@@ -13,7 +13,6 @@ QT_END_NAMESPACE
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
-
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
@@ -23,18 +22,20 @@ private:
     QString filePath, dirPath, dirOutPath;
     QStringList inFileList, outFileList;
 
-    std::unique_ptr<BaseAlg> basePtr;
+    std::unique_ptr<AlgInterface> basePtr;
+    AlgRegistry<QAction*> reg = AlgRegistry<QAction*>::instance();
 
 private slots:
     void showFile();
     void showDir();
     void showOutDir();
-    void on_pushButton_clicked(bool checked);
+    // void on_pushButton_clicked(bool checked);
 
-    void registerMSV();
-    void registerNIPC();
-    void registerZNCC();
+    // void registerGLCMhomo();
 
     void check();
 };
+
+
+
 #endif // MAINWINDOW_H

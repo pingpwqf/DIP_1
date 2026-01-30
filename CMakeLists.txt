@@ -16,6 +16,7 @@ qt_add_executable(DIP_1_1
     ImgPcAlg.h
     ImgPcAlg.cpp
     ImgPcAlg_2.cpp
+    task.h task.cpp
 
 
 )

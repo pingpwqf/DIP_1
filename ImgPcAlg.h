@@ -2,7 +2,9 @@
 #include <opencv2/opencv.hpp>
 #include <QString>
 #include <QVector>
+#include <QRunnable>
 #include <memory>
+
 
 QString MSVNAME = "MSV",
     NIPCNAME = "NIPC",
@@ -18,18 +20,20 @@ enum class ScaleStrategy {
 };
 
 // 接口层
-class AlgInterface {
+class AlgInterface : public QRunnable {
 public:
     virtual ~AlgInterface() = default;
     virtual double process(cv::InputArray input) const = 0;
     virtual double process() const = 0;
     bool expectInput() const { return m_processInput; }
-    void CheckAlg() const;
+    void checkAlg() const;
+    void run();
+    QString Name(){return name;}
 
 protected:
     AlgInterface() = default;
     bool m_processInput = true;
-    QString name;
+    QString name = "No name";
 };
 
 class BaseAlg : public AlgInterface {
@@ -114,7 +118,7 @@ private:
 class GLCMAlg : public AlgInterface {
 public:
     // 增加策略参数，默认使用 PowerOfTwo 以提升大图的 DFT 速度
-    GLCMAlg(cv::InputArray img, int levels, int dx, int dy, ScaleStrategy strategy = ScaleStrategy::ToPowerOfTwo);
+    GLCMAlg(cv::InputArray img, int levels, int dx, int dy, ScaleStrategy strategy);
 
     double process(cv::InputArray) const final {
         throw std::logic_error("This algorithm uses pre-calculated reference.");
@@ -127,19 +131,22 @@ protected:
 
 class GLCMcorrAlg final : public GLCMAlg {
 public:
-    explicit GLCMcorrAlg(cv::InputArray img, int levels, int dx, int dy, ScaleStrategy strategy)
+    GLCMcorrAlg(cv::InputArray img, int levels = 16, int dx = 1, int dy = 0,
+                ScaleStrategy strategy = ScaleStrategy::ToPowerOfTwo)
         : GLCMAlg(img, levels, dx, dy, strategy){name = CORRNAME;}
     double process() const override { return m_glcmPtr->getCorrelation(); }
 };
 
 class GLCMhomoAlg final : public GLCMAlg {
 public:
-    explicit GLCMhomoAlg(cv::InputArray img, int levels, int dx, int dy, ScaleStrategy strategy)
+    GLCMhomoAlg(cv::InputArray img, int levels = 16, int dx = 1, int dy = 0,
+                ScaleStrategy strategy = ScaleStrategy::ToPowerOfTwo)
         : GLCMAlg(img, levels, dx, dy, strategy){name = HOMONAME;}
     double process() const override { return m_glcmPtr->getHomogeneity(); }
 };
 }
 
+template<typename T>
 class AlgRegistry
 {
 public:
@@ -150,15 +157,21 @@ public:
         static AlgRegistry reg;
         return reg;
     }
-    void Register(QString a_name, Creator creator)
+    void Register(T a_name, Creator creator)
     {
+        nameList.append(a_name);
         storage[a_name] = creator;
     }
-    std::unique_ptr<AlgInterface> get(QString a_name, cv::InputArray img){
+    std::unique_ptr<AlgInterface> get(T a_name, cv::InputArray img){
         if(storage.find(a_name) != storage.end()) return storage[a_name](img);
         return nullptr;
     }
+    QVector<T> names()
+    {
+        return nameList;
+    }
 
 private:
-    std::unordered_map<QString, Creator> storage;
+    QVector<T> nameList;
+    std::unordered_map<T, Creator> storage;
 };

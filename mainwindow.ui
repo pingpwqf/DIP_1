@@ -236,8 +236,8 @@
      <property name="title">
       <string>GLCM</string>
      </property>
-     <addaction name="actioncorrelation"/>
-     <addaction name="actionhomogeneity"/>
+     <addaction name="actionCorrelation"/>
+     <addaction name="actionHomogeneity"/>
     </widget>
     <addaction name="actionNIPC"/>
     <addaction name="actionZNCC"/>
@@ -272,7 +272,7 @@
     <string>ZNCC</string>
    </property>
   </action>
-  <action name="actioncorrelation">
+  <action name="actionCorrelation">
    <property name="checkable">
     <bool>true</bool>
    </property>
@@ -280,7 +280,7 @@
     <string>correlation</string>
    </property>
   </action>
-  <action name="actionhomogeneity">
+  <action name="actionHomogeneity">
    <property name="checkable">
     <bool>true</bool>
    </property>
