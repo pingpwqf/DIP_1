@@ -19,57 +19,44 @@ void ProcessingTask::run()
     }
 
     // 发射信号给结果收集器，而不是直接写文件
-    QString fileName = QFileInfo(m_path).fileName();
-    emit resultReady(m_alg->Name(),fileName, val);
+    // QString fileName = QFileInfo(m_path).fileName();
+    emit resultReady(m_alg->Name(), val);
 }
 
-// task.cpp 核心逻辑
-void TaskManager::ExcuteSelected(const QString& refPath, const QString& dirPath, const QString& outPath)
+// task.cpp
+void TaskManager::ExcuteSelected(const QString& refPath, const QString& dirPath)
 {
     QDir dir(dirPath);
     QStringList files = dir.entryList({"*.bmp", "*.png"}, QDir::Files);
+    QVector<QString> selectedAlgs = reg.names();
+
+    // 提前读入参考图（一次即可）
     cv::Mat refImg = cv::imread(refPath.toStdString(), cv::IMREAD_GRAYSCALE);
 
-    const QVector<QString>& choices = reg.names();
-
-    for(const auto& choice : choices) {
-        if(choice.isEmpty()) continue;
-
-        // 1. 判定算法模式
-        // 先用参考图预创建一个算法实例来探测类型
-        auto probeAlg = reg.get(choice, refImg);
+    for(const QString& algName : selectedAlgs) {
+        // 获取一个探测对象，确定模式
+        auto probe = reg.get(algName, refImg);
 
         for(const QString& fileName : files) {
             QString fullPath = dir.absoluteFilePath(fileName);
+            // 将读取和创建逻辑封装进 Task，主线程只管发任务
+            ProcessingTask* task = new ProcessingTask(fullPath, algName, (probe->expectInput() ? probe : nullptr));
 
-            ProcessingTask* task = nullptr;
-
-            if(probeAlg->expectInput()) {
-                // 【参考图模式】：所有图片共用同一个 probeAlg (内含参考图的 UMat)
-                task = new ProcessingTask(fullPath, probeAlg, outPath);
-            } else {
-                // 【GLCM模式】：每张图需要独立的算法实例
-                // 此时直接读取当前图并创建算法
-                cv::Mat currentImg = cv::imread(fullPath.toStdString(), cv::IMREAD_GRAYSCALE);
-                auto dynamicAlg = reg.get(choice, currentImg);
-                task = new ProcessingTask(fullPath, dynamicAlg, outPath);
-            }
-
-            // 2. 连接信号到收集器
+            // 确保 m_collector 已经由 MainWindow 初始化并传入
             connect(task, &ProcessingTask::resultReady, m_collector, &ResultCollector::handleResult);
 
-            // 3. 丢进线程池
+            QThreadPool::globalInstance()->setMaxThreadCount(5);
             QThreadPool::globalInstance()->start(task);
         }
     }
 }
 
-void ResultCollector::handleResult(QString algName, QString fileName, double value)
+void ResultCollector::handleResult(QString algName, double value)
 {
     QString fullPath = m_outputDir + "/" + algName + ".txt";
     QFile file(fullPath);
     if (file.open(QIODevice::Append | QIODevice::Text)) {
         QTextStream out(&file);
-        out << fileName << " : " << value << "\n";
+        out << algName << " : " << value << "\n";
     }
 }

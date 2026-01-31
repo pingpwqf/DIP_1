@@ -33,6 +33,7 @@ private slots:
     // void registerGLCMhomo();
 
     void check();
+    void MainExecute();
 };
 
 

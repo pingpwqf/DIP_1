@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include "task.h"
 
 #include <QFileDialog>
 
@@ -34,6 +35,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(ui->pushButton_4, &QPushButton::clicked,
             this, &MainWindow::check);
+    connect(ui->pushButton_4, &QPushButton::clicked,
+            this, &MainWindow::MainExecute);
 }
 
 void MainWindow::showFile()
@@ -70,12 +73,21 @@ void MainWindow::showOutDir()
 void MainWindow::check()
 {
     basePtr->checkAlg();
-    QFile file1(outFileList[0]);
-    file1.open(QIODevice::WriteOnly | QIODevice::Text);
-    QTextStream outMSV(&file1);
-    outMSV.setAutoDetectUnicode(true);
-    outMSV << "output\n";
-    Qt::flush(outMSV);
+    // QFile file1(outFileList[0]);
+    // file1.open(QIODevice::WriteOnly | QIODevice::Text);
+    // QTextStream outMSV(&file1);
+    // outMSV.setAutoDetectUnicode(true);
+    // outMSV << "output\n";
+    // Qt::flush(outMSV);
+}
+
+void MainWindow::MainExecute()
+{
+    if(dirOutPath.isEmpty()) qDebug()<< "haven't select output path";
+    ResultCollector* rC;
+    rC->setOutputDir(dirOutPath);
+    TaskManager taskEngine(rC);
+    taskEngine.ExcuteSelected(filePath, dirPath);
 }
 
 MainWindow::~MainWindow()

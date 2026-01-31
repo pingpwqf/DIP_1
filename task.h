@@ -13,7 +13,7 @@ public:
     void setOutputDir(QString path) { m_outputDir = path; }
 
 public slots:
-    void handleResult(QString algName, QString fileName, double value);
+    void handleResult(QString algName, double value);
 
 private:
     QString m_outputDir;
@@ -21,11 +21,11 @@ private:
 
 Q_DECLARE_METATYPE(ResultCollector);
 
-class ProcessingTask : public QRunnable, public QObject {
+class ProcessingTask : public QObject,  public QRunnable {
     Q_OBJECT
 public:
-    ProcessingTask(QString imgPath, std::shared_ptr<AlgInterface> alg, QString outPath)
-        : m_path(imgPath), m_alg(alg), m_out(outPath) {
+    ProcessingTask(QString imgPath, QString fileName, std::shared_ptr<AlgInterface> alg )
+        : m_path(imgPath),m_fName(fileName), m_alg(alg) {
         setAutoDelete(true);
     }
 
@@ -33,18 +33,20 @@ public:
 
 private:
     QString m_path;
+    QString m_fName;
     std::shared_ptr<AlgInterface> m_alg;
-    QString m_out;
+    // QString m_out;
 
 signals:
-    void resultReady(QString algName, QString fileName, double value);
+    void resultReady(QString algName, double value);
 };
 
 class TaskManager : public QObject
 {
     Q_OBJECT
 public:
-    void ExcuteSelected(const QString& refPath, const QString& dirPath, const QString& outPath);
+    TaskManager(ResultCollector* rc) : m_collector(rc){};
+    void ExcuteSelected(const QString& refPath, const QString& dirPath);
     QStringList CreateFiles(cv::InputArray img);
 
 private:
