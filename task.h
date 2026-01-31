@@ -4,25 +4,34 @@
 #include <QRunnable>
 #include <QObject>
 #include <QAction>
+#include <QFile>
 
 #include "ImgPcAlg.h"
 
 class ResultCollector : public QObject {
     Q_OBJECT
 public:
+    explicit ResultCollector(QObject* parent = nullptr) : QObject(parent) {}
+    ~ResultCollector() { closeAll();}
+
     void setOutputDir(QString path) { m_outputDir = path; }
+
+    void prepare() {closeAll();}
+    void closeAll();
 
 public slots:
     void handleResult(QString algName, double value);
 
 private:
     QString m_outputDir;
+    QMap<QString, QSharedPointer<QFile>> m_files;
+    QMap<QString, QSharedPointer<QTextStream>> m_streams;
 };
 
 class ProcessingTask : public QObject,  public QRunnable {
     Q_OBJECT
 public:
-    ProcessingTask(QString imgPath, std::shared_ptr<AlgInterface> alg)
+    ProcessingTask(QString imgPath, std::shared_ptr<AlgInterface> alg = nullptr)
         : m_path(imgPath), m_alg(alg) {
         setAutoDelete(true);
     }
@@ -43,7 +52,7 @@ class TaskManager : public QObject
     Q_OBJECT
 public:
     TaskManager(ResultCollector* rc) : m_collector(rc){};
-    void ExcuteSelected(const QString& refPath, const QString& dirPath);
+    void ExecuteSelected(const QString& refPath, const QString& dirPath);
     QStringList CreateFiles(cv::InputArray img);
 
 private:

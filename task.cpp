@@ -1,7 +1,6 @@
 #include "task.h"
 
 #include <QThreadPool>
-#include <QFile>
 #include <QFileInfo>
 #include <QDir>
 
@@ -24,7 +23,7 @@ void ProcessingTask::run()
 }
 
 // task.cpp
-void TaskManager::ExcuteSelected(const QString& refPath, const QString& dirPath)
+void TaskManager::ExecuteSelected(const QString& refPath, const QString& dirPath)
 {
     QDir dir(dirPath);
     QStringList files = dir.entryList({"*.bmp", "*.png"}, QDir::Files);
@@ -51,10 +50,24 @@ void TaskManager::ExcuteSelected(const QString& refPath, const QString& dirPath)
 
 void ResultCollector::handleResult(QString algName, double value)
 {
-    QString fullPath = m_outputDir + "/" + algName + ".txt";
-    QFile file(fullPath);
-    if (file.open(QIODevice::Append | QIODevice::Text)) {
-        QTextStream out(&file);
-        out << algName << " : " << value << "\n";
+    if (!m_streams.contains(algName)) {
+        QString fullPath = m_outputDir + "/" + algName + ".txt";
+        auto file = QSharedPointer<QFile>::create(fullPath);
+        // 使用 WriteOnly | Text 模式，如果需要追加改为 Append
+        if (file->open(QIODevice::Append | QIODevice::Text)) {
+            m_files[algName] = file;
+            m_streams[algName] = QSharedPointer<QTextStream>::create(file.data());
+        }
     }
+
+    if (m_streams.contains(algName)) {
+        *m_streams[algName] << algName << "," << value << "\n";
+        // 适当的时候 flush，或者依赖析构时自动处理
+    }
+}
+
+void ResultCollector::closeAll() {
+    m_streams.clear(); // 顺序很重要：先销毁流
+    for(auto f : m_files) f->close();
+    m_files.clear();
 }
