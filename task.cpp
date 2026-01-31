@@ -2,6 +2,8 @@
 
 #include <QThreadPool>
 #include <QFile>
+#include <QFileInfo>
+#include <QDir>
 
 void ProcessingTask::run()
 {
@@ -12,53 +14,62 @@ void ProcessingTask::run()
     if(m_alg->expectInput()) {
         val = m_alg->process(img); // 非 GLCM 模式
     } else {
-        // GLCM 模式：这里可能需要动态创建，或者 m_alg 内部处理了重新计算逻辑
+        m_alg = AlgRegistry<QString>::instance().get(m_alg->Name(), img);
         val = m_alg->process();
     }
 
     // 发射信号给结果收集器，而不是直接写文件
-    emit resultReady(m_alg->Name(), val);
+    QString fileName = QFileInfo(m_path).fileName();
+    emit resultReady(m_alg->Name(),fileName, val);
 }
 
-void TaskManager::ExcuteSelected(cv::InputArray img_1, cv::InputArray img_2, QStringList files)
+// task.cpp 核心逻辑
+void TaskManager::ExcuteSelected(const QString& refPath, const QString& dirPath, const QString& outPath)
 {
-    const QVector<QAction*>& choices = reg.names();
-    double result;
+    QDir dir(dirPath);
+    QStringList files = dir.entryList({"*.bmp", "*.png"}, QDir::Files);
+    cv::Mat refImg = cv::imread(refPath.toStdString(), cv::IMREAD_GRAYSCALE);
 
-    for(const auto& choice : choices){
-        std::shared_ptr<AlgInterface> task = nullptr;
+    const QVector<QString>& choices = reg.names();
 
-        if(choice->isChecked()){
-            task = reg.get(choice, img_1);
-        }else continue;
+    for(const auto& choice : choices) {
+        if(choice.isEmpty()) continue;
 
-        if(task){
-            task->setAutoDelete(true);
+        // 1. 判定算法模式
+        // 先用参考图预创建一个算法实例来探测类型
+        auto probeAlg = reg.get(choice, refImg);
 
-            if(task->expectInput()) result = task->process(img_2);
-            else {
-                task = reg.get(choice, img_2);
-                result = task->process();
+        for(const QString& fileName : files) {
+            QString fullPath = dir.absoluteFilePath(fileName);
+
+            ProcessingTask* task = nullptr;
+
+            if(probeAlg->expectInput()) {
+                // 【参考图模式】：所有图片共用同一个 probeAlg (内含参考图的 UMat)
+                task = new ProcessingTask(fullPath, probeAlg, outPath);
+            } else {
+                // 【GLCM模式】：每张图需要独立的算法实例
+                // 此时直接读取当前图并创建算法
+                cv::Mat currentImg = cv::imread(fullPath.toStdString(), cv::IMREAD_GRAYSCALE);
+                auto dynamicAlg = reg.get(choice, currentImg);
+                task = new ProcessingTask(fullPath, dynamicAlg, outPath);
             }
 
-            QThreadPool::globalInstance()->start(task.get());
+            // 2. 连接信号到收集器
+            connect(task, &ProcessingTask::resultReady, m_collector, &ResultCollector::handleResult);
+
+            // 3. 丢进线程池
+            QThreadPool::globalInstance()->start(task);
         }
     }
 }
 
-QStringList TaskManager::CreateFiles(cv::InputArray img)
+void ResultCollector::handleResult(QString algName, QString fileName, double value)
 {
-    const QVector<QAction*>& choices = reg.names();
-    QStringList flst;
-
-    for(const auto& choice : choices){
-        if(choice->isChecked()){
-            std::shared_ptr<AlgInterface> task = reg.get(choice, img);
-            QString fileName = task->Name() + ".txt";
-            flst.append(fileName);
-        }else continue;
+    QString fullPath = m_outputDir + "/" + algName + ".txt";
+    QFile file(fullPath);
+    if (file.open(QIODevice::Append | QIODevice::Text)) {
+        QTextStream out(&file);
+        out << fileName << " : " << value << "\n";
     }
-
-    return flst;
 }
-

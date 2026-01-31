@@ -16,19 +16,19 @@ MainWindow::MainWindow(QWidget *parent)
 
     // connect(ui->actionMSV, &QAction::toggled,
     //         this, &MainWindow::registerMSV);
-    reg.Register(ui->actionMSV, [](cv::InputArray img){
+    reg.Register(MSVNAME, [](cv::InputArray img){
         return std::make_unique<MSVAlg>(img);
     });
-    reg.Register(ui->actionNIPC, [](cv::InputArray img){
+    reg.Register(NIPCNAME, [](cv::InputArray img){
         return std::make_unique<NIPCAlg>(img);
     });
-    reg.Register(ui->actionZNCC, [](cv::InputArray img){
+    reg.Register(ZNCCNAME, [](cv::InputArray img){
         return std::make_unique<ZNCCAlg>(img);
     });
-    reg.Register(ui->actionCorrelation, [](cv::InputArray img){
+    reg.Register(CORRNAME, [](cv::InputArray img){
         return std::make_unique<GLCM::GLCMcorrAlg>(img);
     });
-    reg.Register(ui->actionHomogeneity, [](cv::InputArray img){
+    reg.Register(HOMONAME, [](cv::InputArray img){
         return std::make_unique<GLCM::GLCMhomoAlg>(img);
     });
 

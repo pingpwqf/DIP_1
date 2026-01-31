@@ -23,7 +23,7 @@ private:
     QStringList inFileList, outFileList;
 
     std::unique_ptr<AlgInterface> basePtr;
-    AlgRegistry<QAction*> reg = AlgRegistry<QAction*>::instance();
+    AlgRegistry<QString> reg = AlgRegistry<QString>::instance();
 
 private slots:
     void showFile();
@@ -31,8 +31,6 @@ private slots:
     void showOutDir();
     // void on_pushButton_clicked(bool checked);
     // void registerGLCMhomo();
-
-    void resultCollector();
 
     void check();
 };
