@@ -7,16 +7,19 @@
 
 #include "ImgPcAlg.h"
 
-class Task : public QRunnable
-{
+class ProcessingTask : public QRunnable {
 public:
-    Task();
+    ProcessingTask(QString imgPath, std::shared_ptr<AlgInterface> alg, QString outPath)
+        : m_path(imgPath), m_alg(alg), m_out(outPath) {
+        setAutoDelete(true);
+    }
+
     void run() override;
+
 private:
-    std::unique_ptr<AlgInterface> interface;
-    cv::UMat img_1;
-    cv::UMat img_2;
-    QAction* choice;
+    QString m_path;
+    std::shared_ptr<AlgInterface> m_alg;
+    QString m_out;
 };
 
 class TaskManager : public QObject

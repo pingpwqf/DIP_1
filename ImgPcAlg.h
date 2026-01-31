@@ -150,7 +150,7 @@ template<typename T>
 class AlgRegistry
 {
 public:
-    using Creator = std::function<std::unique_ptr<AlgInterface>(cv::InputArray)>;
+    using Creator = std::function<std::shared_ptr<AlgInterface>(cv::InputArray)>;
 
     static AlgRegistry instance()
     {
@@ -162,7 +162,7 @@ public:
         nameList.append(a_name);
         storage[a_name] = creator;
     }
-    std::unique_ptr<AlgInterface> get(T a_name, cv::InputArray img){
+    std::shared_ptr<AlgInterface> get(T a_name, cv::InputArray img){
         if(storage.find(a_name) != storage.end()) return storage[a_name](img);
         return nullptr;
     }

@@ -3,25 +3,21 @@
 #include <QThreadPool>
 #include <QFile>
 
-Task::Task() {}
-
-void Task::run()
+void ProcessingTask::run()
 {
-    QString fileName = "1";
-    QFile file(fileName);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) return;
+    cv::Mat img = cv::imread(m_path.toStdString(), cv::IMREAD_GRAYSCALE);
+    if(img.empty()) return;
 
-    QTextStream out(&file);
-    double result;
-    // 调用process
-    if(interface->expectInput()) result = interface->process(img_2);
-    else {
-        interface = AlgRegistry<QAction*>::instance().get(choice, img_2);
-        result = interface->process();
+    double val = 0;
+    if(m_alg->expectInput()) {
+        val = m_alg->process(img); // 非 GLCM 模式
+    } else {
+        // GLCM 模式：这里可能需要动态创建，或者 m_alg 内部处理了重新计算逻辑
+        val = m_alg->process();
     }
-    // 写入数据
-    out << result << "\n";
-    out.flush();
+
+    // 发射信号给结果收集器，而不是直接写文件
+    emit resultReady(m_alg->Name(), val);
 }
 
 void TaskManager::ExcuteSelected(cv::InputArray img_1, cv::InputArray img_2, QStringList files)
@@ -30,7 +26,7 @@ void TaskManager::ExcuteSelected(cv::InputArray img_1, cv::InputArray img_2, QSt
     double result;
 
     for(const auto& choice : choices){
-        std::unique_ptr<AlgInterface> task = nullptr;
+        std::shared_ptr<AlgInterface> task = nullptr;
 
         if(choice->isChecked()){
             task = reg.get(choice, img_1);
@@ -57,7 +53,7 @@ QStringList TaskManager::CreateFiles(cv::InputArray img)
 
     for(const auto& choice : choices){
         if(choice->isChecked()){
-            std::unique_ptr<AlgInterface> task = reg.get(choice, img);
+            std::shared_ptr<AlgInterface> task = reg.get(choice, img);
             QString fileName = task->Name() + ".txt";
             flst.append(fileName);
         }else continue;

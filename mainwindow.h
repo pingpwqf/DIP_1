@@ -30,8 +30,9 @@ private slots:
     void showDir();
     void showOutDir();
     // void on_pushButton_clicked(bool checked);
-
     // void registerGLCMhomo();
+
+    void resultCollector();
 
     void check();
 };
