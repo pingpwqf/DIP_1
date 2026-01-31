@@ -19,13 +19,11 @@ private:
     QString m_outputDir;
 };
 
-Q_DECLARE_METATYPE(ResultCollector);
-
 class ProcessingTask : public QObject,  public QRunnable {
     Q_OBJECT
 public:
-    ProcessingTask(QString imgPath, QString fileName, std::shared_ptr<AlgInterface> alg )
-        : m_path(imgPath),m_fName(fileName), m_alg(alg) {
+    ProcessingTask(QString imgPath, std::shared_ptr<AlgInterface> alg)
+        : m_path(imgPath), m_alg(alg) {
         setAutoDelete(true);
     }
 
@@ -33,7 +31,6 @@ public:
 
 private:
     QString m_path;
-    QString m_fName;
     std::shared_ptr<AlgInterface> m_alg;
     // QString m_out;
 

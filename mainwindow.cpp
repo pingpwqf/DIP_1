@@ -1,8 +1,8 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
-#include "task.h"
 
 #include <QFileDialog>
+#include <QThreadPool>
 
 cv::Mat testImage = cv::Mat::ones(3, 3, CV_8UC1);
 
@@ -11,6 +11,8 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+    QThreadPool::globalInstance()->setMaxThreadCount(5);
+
     connect(ui->pushButton, SIGNAL(clicked(bool)), this, SLOT(showFile()));
     connect(ui->pushButton_2, SIGNAL(clicked(bool)), this, SLOT(showDir()));
     connect(ui->pushButton_5, SIGNAL(clicked(bool)), this, SLOT(showOutDir()));
@@ -84,10 +86,9 @@ void MainWindow::check()
 void MainWindow::MainExecute()
 {
     if(dirOutPath.isEmpty()) qDebug()<< "haven't select output path";
-    ResultCollector* rC;
-    rC->setOutputDir(dirOutPath);
-    TaskManager taskEngine(rC);
-    taskEngine.ExcuteSelected(filePath, dirPath);
+    collector->setOutputDir(dirOutPath);
+    taskManager = std::make_unique<TaskManager>(collector.get());
+    taskManager->ExcuteSelected(filePath, dirPath);
 }
 
 MainWindow::~MainWindow()

@@ -3,6 +3,7 @@
 
 #include <QMainWindow>
 #include "ImgPcAlg.h"
+#include "task.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui {
@@ -23,6 +24,8 @@ private:
     QStringList inFileList, outFileList;
 
     std::unique_ptr<AlgInterface> basePtr;
+    std::unique_ptr<ResultCollector> collector;
+    std::unique_ptr<TaskManager> taskManager;
     AlgRegistry<QString> reg = AlgRegistry<QString>::instance();
 
 private slots:

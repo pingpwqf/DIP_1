@@ -5,8 +5,7 @@
 #include <QRunnable>
 #include <memory>
 
-
-QString MSVNAME = "MSV",
+const QString MSVNAME = "MSV",
     NIPCNAME = "NIPC",
     ZNCCNAME = "ZNCC",
     CORRNAME = "GLCMcorr",
@@ -20,14 +19,13 @@ enum class ScaleStrategy {
 };
 
 // 接口层
-class AlgInterface : public QRunnable {
+class AlgInterface{
 public:
     virtual ~AlgInterface() = default;
     virtual double process(cv::InputArray input) const = 0;
     virtual double process() const = 0;
     bool expectInput() const { return m_processInput; }
     void checkAlg() const;
-    void run();
     QString Name(){return name;}
 
 protected:

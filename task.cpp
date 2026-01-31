@@ -40,12 +40,10 @@ void TaskManager::ExcuteSelected(const QString& refPath, const QString& dirPath)
         for(const QString& fileName : files) {
             QString fullPath = dir.absoluteFilePath(fileName);
             // 将读取和创建逻辑封装进 Task，主线程只管发任务
-            ProcessingTask* task = new ProcessingTask(fullPath, algName, (probe->expectInput() ? probe : nullptr));
+            ProcessingTask* task = new ProcessingTask(fullPath, (probe->expectInput() ? probe : nullptr));
 
             // 确保 m_collector 已经由 MainWindow 初始化并传入
             connect(task, &ProcessingTask::resultReady, m_collector, &ResultCollector::handleResult);
-
-            QThreadPool::globalInstance()->setMaxThreadCount(5);
             QThreadPool::globalInstance()->start(task);
         }
     }
