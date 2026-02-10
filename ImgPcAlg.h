@@ -150,7 +150,7 @@ class AlgRegistry
 public:
     using Creator = std::function<std::shared_ptr<AlgInterface>(cv::InputArray)>;
 
-    static AlgRegistry instance()
+    static AlgRegistry& instance()
     {
         static AlgRegistry reg;
         return reg;

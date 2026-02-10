@@ -24,7 +24,7 @@ private:
     QStringList inFileList, outFileList;
 
     ResultCollector collector;
-    std::unique_ptr<AlgInterface> basePtr;
+    // std::unique_ptr<AlgInterface> basePtr;
     std::unique_ptr<TaskManager> taskEngine;
     AlgRegistry<QString> reg = AlgRegistry<QString>::instance();
 

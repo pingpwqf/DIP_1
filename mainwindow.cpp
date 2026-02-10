@@ -36,8 +36,8 @@ MainWindow::MainWindow(QWidget *parent)
         return std::make_unique<GLCM::GLCMhomoAlg>(img);
     });
 
-    connect(ui->pushButton_4, &QPushButton::clicked,
-            this, &MainWindow::check);
+    // connect(ui->pushButton_4, &QPushButton::clicked,
+    //         this, &MainWindow::check);
     connect(ui->pushButton_4, &QPushButton::clicked,
             this, &MainWindow::MainExecute);
 }
@@ -73,16 +73,16 @@ void MainWindow::showOutDir()
 //     if(HOMOfile.exists()) outFileList.append(filename);
 // }
 
-void MainWindow::check()
-{
-    basePtr->checkAlg();
-    // QFile file1(outFileList[0]);
-    // file1.open(QIODevice::WriteOnly | QIODevice::Text);
-    // QTextStream outMSV(&file1);
-    // outMSV.setAutoDetectUnicode(true);
-    // outMSV << "output\n";
-    // Qt::flush(outMSV);
-}
+// void MainWindow::check()
+// {
+//     basePtr->checkAlg();
+//     QFile file1(outFileList[0]);
+//     file1.open(QIODevice::WriteOnly | QIODevice::Text);
+//     QTextStream outMSV(&file1);
+//     outMSV.setAutoDetectUnicode(true);
+//     outMSV << "output\n";
+//     Qt::flush(outMSV);
+// }
 
 void MainWindow::MainExecute()
 {

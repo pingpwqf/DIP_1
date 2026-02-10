@@ -31,8 +31,8 @@ class Ui_MainWindow
 public:
     QAction *actionNIPC;
     QAction *actionZNCC;
-    QAction *actioncorrelation;
-    QAction *actionhomogeneity;
+    QAction *actionCorrelation;
+    QAction *actionHomogeneity;
     QAction *actionMSV;
     QAction *actionROI;
     QWidget *centralwidget;
@@ -70,12 +70,12 @@ public:
         actionZNCC = new QAction(MainWindow);
         actionZNCC->setObjectName("actionZNCC");
         actionZNCC->setCheckable(true);
-        actioncorrelation = new QAction(MainWindow);
-        actioncorrelation->setObjectName("actioncorrelation");
-        actioncorrelation->setCheckable(true);
-        actionhomogeneity = new QAction(MainWindow);
-        actionhomogeneity->setObjectName("actionhomogeneity");
-        actionhomogeneity->setCheckable(true);
+        actionCorrelation = new QAction(MainWindow);
+        actionCorrelation->setObjectName("actionCorrelation");
+        actionCorrelation->setCheckable(true);
+        actionHomogeneity = new QAction(MainWindow);
+        actionHomogeneity->setObjectName("actionHomogeneity");
+        actionHomogeneity->setCheckable(true);
         actionMSV = new QAction(MainWindow);
         actionMSV->setObjectName("actionMSV");
         actionMSV->setCheckable(true);
@@ -169,8 +169,8 @@ public:
         menuselect->addAction(menuGLCM->menuAction());
         menuselect->addSeparator();
         menuselect->addAction(actionMSV);
-        menuGLCM->addAction(actioncorrelation);
-        menuGLCM->addAction(actionhomogeneity);
+        menuGLCM->addAction(actionCorrelation);
+        menuGLCM->addAction(actionHomogeneity);
         menupre->addAction(actionROI);
 
         retranslateUi(MainWindow);
@@ -183,8 +183,8 @@ public:
         MainWindow->setWindowTitle(QCoreApplication::translate("MainWindow", "\346\225\243\346\226\221\345\233\276\345\203\217\345\244\204\347\220\206\350\275\257\344\273\266", nullptr));
         actionNIPC->setText(QCoreApplication::translate("MainWindow", "NIPC", nullptr));
         actionZNCC->setText(QCoreApplication::translate("MainWindow", "ZNCC", nullptr));
-        actioncorrelation->setText(QCoreApplication::translate("MainWindow", "correlation", nullptr));
-        actionhomogeneity->setText(QCoreApplication::translate("MainWindow", "homogeneity", nullptr));
+        actionCorrelation->setText(QCoreApplication::translate("MainWindow", "correlation", nullptr));
+        actionHomogeneity->setText(QCoreApplication::translate("MainWindow", "homogeneity", nullptr));
         actionMSV->setText(QCoreApplication::translate("MainWindow", "MSV", nullptr));
         actionROI->setText(QCoreApplication::translate("MainWindow", "ROI", nullptr));
         pushButton_4->setText(QCoreApplication::translate("MainWindow", "\347\241\256\350\256\244", nullptr));
