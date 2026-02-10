@@ -51,14 +51,14 @@ void MainWindow::showFile()
 
 void MainWindow::showDir()
 {
-    dirPath = QFileDialog::getExistingDirectory(this, tr("Open Directory"),filePath+="/..",
+    dirPath = QFileDialog::getExistingDirectory(this, tr("Open Directory"),filePath+"/..",
                                                   QFileDialog::ShowDirsOnly|QFileDialog::DontResolveSymlinks);
     ui->dirLineEdit->setText(dirPath);
 }
 
 void MainWindow::showOutDir()
 {
-    dirOutPath = QFileDialog::getExistingDirectory(this, tr("Open Directory"),filePath+="/..",
+    dirOutPath = QFileDialog::getExistingDirectory(this, tr("Open Directory"),"/",
                                                 QFileDialog::ShowDirsOnly|QFileDialog::DontResolveSymlinks);
     ui->dirLineEdit_2->setText(dirOutPath);
 }

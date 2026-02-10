@@ -3,24 +3,26 @@
 
 #include <QRunnable>
 #include <QObject>
-#include <QAction>
 #include <QFile>
-
+#include <QTextStream>
+#include <QMap>
+#include <QSharedPointer>
 #include "ImgPcAlg.h"
 
+// 结果收集器：负责将不同线程产生的数据分类写入文件
 class ResultCollector : public QObject {
     Q_OBJECT
 public:
     explicit ResultCollector(QObject* parent = nullptr) : QObject(parent) {}
-    ~ResultCollector() { closeAll();}
+    ~ResultCollector() { closeAll(); }
 
     void setOutputDir(QString path) { m_outputDir = path; }
-
-    void prepare() {closeAll();}
+    void prepare(); // 准备工作：检查并创建目录
     void closeAll();
 
 public slots:
-    void handleResult(QString algName, double value);
+    // 增加 fileName 参数，让结果知道对应哪张图
+    void handleResult(QString algName, QString fileName, double value);
 
 private:
     QString m_outputDir;
@@ -28,11 +30,13 @@ private:
     QMap<QString, QSharedPointer<QTextStream>> m_streams;
 };
 
-class ProcessingTask : public QObject,  public QRunnable {
+// 具体的处理任务
+class ProcessingTask : public QObject, public QRunnable {
     Q_OBJECT
 public:
-    ProcessingTask(QString imgPath, std::shared_ptr<AlgInterface> alg = nullptr)
-        : m_path(imgPath), m_alg(alg) {
+    // 传递算法名称和参考图，而不是直接传递算法实例，以保证线程安全
+    ProcessingTask(QString imgPath, QString algName, cv::Mat refImg)
+        : m_path(imgPath), m_algName(algName), m_refImg(refImg) {
         setAutoDelete(true);
     }
 
@@ -40,23 +44,23 @@ public:
 
 private:
     QString m_path;
-    std::shared_ptr<AlgInterface> m_alg;
-    // QString m_out;
+    QString m_algName;
+    cv::Mat m_refImg;
 
 signals:
-    void resultReady(QString algName, double value);
+    void resultReady(QString algName, QString fileName, double value);
+    void errorOccurred(QString msg);
 };
 
+// 任务管理器
 class TaskManager : public QObject
 {
     Q_OBJECT
 public:
-    TaskManager(ResultCollector* rc) : m_collector(rc){};
+    TaskManager(ResultCollector* rc) : m_collector(rc) {}
     void ExecuteSelected(const QString& refPath, const QString& dirPath);
-    QStringList CreateFiles(cv::InputArray img);
 
 private:
-    AlgRegistry<QString> reg = AlgRegistry<QString>::instance();
     ResultCollector* m_collector;
 };
 

@@ -1,73 +1,119 @@
 #include "task.h"
-
 #include <QThreadPool>
 #include <QFileInfo>
 #include <QDir>
+#include <QDebug>
 
-void ProcessingTask::run()
-{
-    cv::Mat img = cv::imread(m_path.toStdString(), cv::IMREAD_GRAYSCALE);
-    if(img.empty()) return;
-
-    double val = 0;
-    if(m_alg->expectInput()) {
-        val = m_alg->process(img); // 非 GLCM 模式
-    } else {
-        m_alg = AlgRegistry<QString>::instance().get(m_alg->Name(), img);
-        val = m_alg->process();
-    }
-
-    // 发射信号给结果收集器，而不是直接写文件
-    // QString fileName = QFileInfo(m_path).fileName();
-    emit resultReady(m_alg->Name(), val);
+// 辅助函数：处理 OpenCV 在 Windows 下的中文路径读取问题
+cv::Mat imread_safe(const QString& path) {
+#ifdef Q_OS_WIN
+    // Windows 下使用特殊处理确保中文路径可用
+    return cv::imread(path.toLocal8Bit().constData(), cv::IMREAD_GRAYSCALE);
+#else
+    return cv::imread(path.toStdString(), cv::IMREAD_GRAYSCALE);
+#endif
 }
 
-// task.cpp
-void TaskManager::ExecuteSelected(const QString& refPath, const QString& dirPath)
-{
+void ProcessingTask::run() {
+    cv::Mat img = imread_safe(m_path);
+    if (img.empty()) {
+        qDebug() << "Failed to read image:" << m_path;
+        return;
+    }
+
+    // 在子线程中获取属于自己的算法实例
+    auto alg = AlgRegistry<QString>::instance().get(m_algName, m_refImg);
+    if (!alg) return;
+
+    double val = 0;
+    try {
+        if (alg->expectInput()) {
+            val = alg->process(img);
+        } else {
+            // 对于 GLCM 等不直接接受输入的算法，需要针对当前图创建实例
+            auto currentAlg = AlgRegistry<QString>::instance().get(m_algName, img);
+            if (currentAlg) val = currentAlg->process();
+        }
+        emit resultReady(m_algName, QFileInfo(m_path).fileName(), val);
+    } catch (const std::exception& e) {
+        qDebug() << "Algorithm error:" << e.what();
+    }
+}
+
+void TaskManager::ExecuteSelected(const QString& refPath, const QString& dirPath) {
+    if (refPath.isEmpty() || dirPath.isEmpty()) {
+        qDebug() << "Source or reference path is empty!";
+        return;
+    }
+
     QDir dir(dirPath);
-    QStringList files = dir.entryList({"*.bmp", "*.png"}, QDir::Files);
-    QVector<QString> selectedAlgs = reg.names();
+    QStringList files = dir.entryList({"*.bmp", "*.png", "*.jpg"}, QDir::Files);
+    if (files.isEmpty()) {
+        qDebug() << "No valid images found in" << dirPath;
+        return;
+    }
 
-    // 提前读入参考图（一次即可）
-    cv::Mat refImg = cv::imread(refPath.toStdString(), cv::IMREAD_GRAYSCALE);
+    cv::Mat refImg = imread_safe(refPath);
+    if (refImg.empty()) {
+        qDebug() << "Reference image load failed:" << refPath;
+        return;
+    }
 
-    for(const QString& algName : selectedAlgs) {
-        // 获取一个探测对象，确定模式
-        auto probe = reg.get(algName, refImg);
+    QVector<QString> selectedAlgs = AlgRegistry<QString>::instance().names();
 
-        for(const QString& fileName : files) {
+    for (QString algName : selectedAlgs) {
+        for (QString fileName : files) {
             QString fullPath = dir.absoluteFilePath(fileName);
-            // 将读取和创建逻辑封装进 Task，主线程只管发任务
-            ProcessingTask* task = new ProcessingTask(fullPath, probe);
+            ProcessingTask* task = new ProcessingTask(fullPath, algName, refImg);
 
-            // 确保 m_collector 已经由 MainWindow 初始化并传入
             connect(task, &ProcessingTask::resultReady, m_collector, &ResultCollector::handleResult);
             QThreadPool::globalInstance()->start(task);
         }
     }
 }
 
-void ResultCollector::handleResult(QString algName, double value)
-{
+void ResultCollector::prepare() {
+    closeAll();
+    if (!m_outputDir.isEmpty()) {
+        QDir dir;
+        if (!dir.exists(m_outputDir)) {
+            if (dir.mkpath(m_outputDir)) {
+                qDebug() << "Created output directory:" << m_outputDir;
+            } else {
+                qDebug() << "Critical: Could not create output directory!";
+            }
+        }
+    }
+}
+
+void ResultCollector::handleResult(QString algName, QString fileName, double value) {
     if (!m_streams.contains(algName)) {
-        QString fullPath = m_outputDir + "/" + algName + ".txt";
+        QString fullPath = m_outputDir + "/" + algName + ".csv"; // 建议用 csv 方便表格打开
         auto file = QSharedPointer<QFile>::create(fullPath);
-        // 使用 WriteOnly | Text 模式，如果需要追加改为 Append
+
+        // 使用 Append 模式，并在文件开头写入表头
+        bool isNew = !file->exists();
         if (file->open(QIODevice::Append | QIODevice::Text)) {
             m_files[algName] = file;
-            m_streams[algName] = QSharedPointer<QTextStream>::create(file.data());
+            auto stream = QSharedPointer<QTextStream>::create(file.data());
+            if (isNew) *stream << "FileName,Value\n";
+            m_streams[algName] = stream;
+        } else {
+            qDebug() << "Failed to open output file:" << fullPath;
+            return;
         }
     }
 
     if (m_streams.contains(algName)) {
-        *m_streams[algName] << algName << "," << value << "\n";
-        // 适当的时候 flush，或者依赖析构时自动处理
+        *m_streams[algName] << fileName << "," << QString::number(value, 'f', 6) << "\n";
+        m_streams[algName]->flush(); // 强制刷盘，防止崩溃丢失数据
     }
 }
 
 void ResultCollector::closeAll() {
-    m_streams.clear(); // 顺序很重要：先销毁流
-    for(auto f : m_files) f->close();
+    m_streams.clear();
+    for (auto f : m_files) {
+        if (f->isOpen()) f->close();
+    }
     m_files.clear();
 }

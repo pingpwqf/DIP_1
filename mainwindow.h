@@ -35,7 +35,7 @@ private slots:
     // void on_pushButton_clicked(bool checked);
     // void registerGLCMhomo();
 
-    void check();
+    // void check();
     void MainExecute();
 };
 
