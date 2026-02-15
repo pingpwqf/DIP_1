@@ -1,5 +1,8 @@
 #include "ImgPcAlg.h"
 
+QString CORRNAME = "GLCMcorr",
+        HOMONAME = "GLCMhomo";
+
 // --- GLCM 及其优化实现 ---
 
 namespace GLCM {

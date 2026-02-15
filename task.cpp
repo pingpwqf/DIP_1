@@ -40,7 +40,7 @@ void ProcessingTask::run() {
     }
 }
 
-void TaskManager::ExecuteSelected(const QString& refPath, const QString& dirPath) {
+void TaskManager::ExecuteSelected(const QString& refPath, const QString& dirPath, QVector<QString> selectedAlgs) {
     if (refPath.isEmpty() || dirPath.isEmpty()) {
         qDebug() << "Source or reference path is empty!";
         return;
@@ -59,7 +59,7 @@ void TaskManager::ExecuteSelected(const QString& refPath, const QString& dirPath
         return;
     }
 
-    QVector<QString> selectedAlgs = AlgRegistry<QString>::instance().names();
+    // QVector<QString> selectedAlgs = AlgRegistry<QString>::instance().names();
 
     for (QString algName : selectedAlgs) {
         for (QString fileName : files) {

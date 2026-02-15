@@ -23,6 +23,7 @@ private:
     QString filePath, dirPath, dirOutPath;
     QStringList inFileList, outFileList;
 
+    QVector<QString> selectedChoices;
     ResultCollector collector;
     // std::unique_ptr<AlgInterface> basePtr;
     std::unique_ptr<TaskManager> taskEngine;

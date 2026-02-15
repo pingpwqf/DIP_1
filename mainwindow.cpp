@@ -89,7 +89,12 @@ void MainWindow::MainExecute()
     if(dirOutPath.isEmpty()) qDebug()<< "haven't select output path";
     collector.setOutputDir(dirOutPath);
     collector.prepare();
-    taskEngine->ExecuteSelected(filePath, dirPath);
+    if(ui->actionMSV->isChecked())selectedChoices.emplaceBack(MSVNAME);
+    if(ui->actionNIPC->isChecked())selectedChoices.emplaceBack(NIPCNAME);
+    if(ui->actionZNCC->isChecked())selectedChoices.emplaceBack(ZNCCNAME);
+    if(ui->actionCorrelation->isChecked())selectedChoices.emplaceBack(CORRNAME);
+    if(ui->actionHomogeneity->isChecked())selectedChoices.emplaceBack(HOMONAME);
+    taskEngine->ExecuteSelected(filePath, dirPath, selectedChoices);
 }
 
 MainWindow::~MainWindow()

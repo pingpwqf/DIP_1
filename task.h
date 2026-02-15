@@ -58,7 +58,7 @@ class TaskManager : public QObject
     Q_OBJECT
 public:
     TaskManager(ResultCollector* rc) : m_collector(rc) {}
-    void ExecuteSelected(const QString& refPath, const QString& dirPath);
+    void ExecuteSelected(const QString& refPath, const QString& dirPath, QVector<QString> selectedAlgs);
 
 private:
     ResultCollector* m_collector;

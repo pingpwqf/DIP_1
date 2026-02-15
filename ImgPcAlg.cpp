@@ -1,5 +1,9 @@
 #include "ImgPcAlg.h"
 
+QString MSVNAME = "MSV",
+    NIPCNAME = "NIPC",
+    ZNCCNAME = "ZNCC";
+
 BaseAlg::BaseAlg(cv::InputArray img, int f) : m_factor(std::max(1, f)) {
     if (img.empty()) throw std::invalid_argument("Reference image is empty.");
     img.getUMat().convertTo(m_refImg, CV_32F);

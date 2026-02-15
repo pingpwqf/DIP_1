@@ -6,11 +6,8 @@
 #include <QVector>
 #include <QString>
 
-QString MSVNAME = "MSV",
-        NIPCNAME = "NIPC",
-        ZNCCNAME = "ZNCC",
-        CORRNAME = "GLCMcorr",
-        HOMONAME = "GLCMhomo";
+extern QString MSVNAME,NIPCNAME,ZNCCNAME,
+        CORRNAME,HOMONAME;
 
 // 策略枚举
 enum class ScaleStrategy {
