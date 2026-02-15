@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <QVector>
 #include <QString>
+#include <QDebug>
 
 extern QString MSVNAME,NIPCNAME,ZNCCNAME,
         CORRNAME,HOMONAME;
@@ -130,12 +131,15 @@ public:
     }
     void Register(T a_name, Creator creator)
     {
-        nameList.append(a_name);
+        nameList.emplaceBack(a_name);
         storage[a_name] = creator;
     }
     std::shared_ptr<AlgInterface> get(T a_name, cv::InputArray img){
         if(storage.find(a_name) != storage.end()) return storage[a_name](img);
-        return nullptr;
+        else {
+            qDebug() << "storage is full";
+            return nullptr;
+        }
     }
     QVector<T> names()
     {

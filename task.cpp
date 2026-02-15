@@ -10,7 +10,7 @@ cv::Mat imread_safe(const QString& path) {
     // Windows 下使用特殊处理确保中文路径可用
     return cv::imread(path.toLocal8Bit().constData(), cv::IMREAD_GRAYSCALE);
 #else
-    return cv::imread(path.toStdString(), cv::IMREAD_GRAYSCALE);
+    return cv::imread(path.toLatin1().data(), cv::IMREAD_GRAYSCALE);
 #endif
 }
 
@@ -19,30 +19,37 @@ void ProcessingTask::run() {
     if (img.empty()) {
         qDebug() << "Failed to read image:" << m_path;
         return;
-    }
+    }else qDebug() << "get image!";
 
     // 在子线程中获取属于自己的算法实例
     auto alg = AlgRegistry<QString>::instance().get(m_algName, m_refImg);
     if (!alg) return;
+    else qDebug() << "get alg!";
 
     double val = 0;
-    try {
-        if (alg->expectInput()) {
-            val = alg->process(img);
-        } else {
-            // 对于 GLCM 等不直接接受输入的算法，需要针对当前图创建实例
-            auto currentAlg = AlgRegistry<QString>::instance().get(m_algName, img);
-            if (currentAlg) val = currentAlg->process();
-        }
-        emit resultReady(m_algName, QFileInfo(m_path).fileName(), val);
-    } catch (const std::exception& e) {
-        qDebug() << "Algorithm error:" << e.what();
+    // try {
+    if (alg->expectInput()) {
+        val = alg->process(img);
+    } else {
+        // 对于 GLCM 等不直接接受输入的算法，需要针对当前图创建实例
+        auto currentAlg = AlgRegistry<QString>::instance().get(m_algName, img);
+        if (currentAlg) val = currentAlg->process();
     }
+    qDebug() << "getval:";
+    emit resultReady(m_algName, QFileInfo(m_path).fileName(), val);
+    // } catch (const std::exception& e) {
+    //     qDebug() << "Algorithm error:" << e.what();
+    // }
 }
 
 void TaskManager::ExecuteSelected(const QString& refPath, const QString& dirPath, QVector<QString> selectedAlgs) {
     if (refPath.isEmpty() || dirPath.isEmpty()) {
         qDebug() << "Source or reference path is empty!";
+        return;
+    }
+
+    if (selectedAlgs.empty()){
+        qDebug() << "empty choice!";
         return;
     }
 
@@ -62,12 +69,15 @@ void TaskManager::ExecuteSelected(const QString& refPath, const QString& dirPath
     // QVector<QString> selectedAlgs = AlgRegistry<QString>::instance().names();
 
     for (QString algName : selectedAlgs) {
+        qDebug() << algName;
         for (QString fileName : files) {
             QString fullPath = dir.absoluteFilePath(fileName);
             ProcessingTask* task = new ProcessingTask(fullPath, algName, refImg);
 
             connect(task, &ProcessingTask::resultReady, m_collector, &ResultCollector::handleResult);
+            // qDebug() << "ready to allocate a thread";
             QThreadPool::globalInstance()->start(task);
+            // qDebug() << "run succeed";
         }
     }
 }

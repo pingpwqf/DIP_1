@@ -89,12 +89,16 @@ void MainWindow::MainExecute()
     if(dirOutPath.isEmpty()) qDebug()<< "haven't select output path";
     collector.setOutputDir(dirOutPath);
     collector.prepare();
-    if(ui->actionMSV->isChecked())selectedChoices.emplaceBack(MSVNAME);
+    if(ui->actionMSV->isChecked()){
+        selectedChoices.emplaceBack(MSVNAME);
+        qDebug() << "MSV";
+    }
     if(ui->actionNIPC->isChecked())selectedChoices.emplaceBack(NIPCNAME);
     if(ui->actionZNCC->isChecked())selectedChoices.emplaceBack(ZNCCNAME);
     if(ui->actionCorrelation->isChecked())selectedChoices.emplaceBack(CORRNAME);
     if(ui->actionHomogeneity->isChecked())selectedChoices.emplaceBack(HOMONAME);
     taskEngine->ExecuteSelected(filePath, dirPath, selectedChoices);
+    ui->statusbar->showMessage(tr("完成"), 2000);
 }
 
 MainWindow::~MainWindow()
