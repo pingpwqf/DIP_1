@@ -27,7 +27,7 @@ public:
      * @param input 输入图像。若算法内置了参考图或 GLCM，则该参数可为空（cv::noArray()）
      */
     virtual double process(cv::InputArray input = cv::noArray()) const = 0;
-    bool expectInput(){return processInput;}
+    bool expectInput() const {return processInput;}
 
 protected:
     AlgInterface() = default;
@@ -96,6 +96,8 @@ namespace GLCM {
         void computeStatistics();
     };
 
+    std::shared_ptr<GLCmat> getPSGLCM(cv::InputArray img, int levels, int dx, int dy, ScaleStrategy strategy);
+
     class GLCMAlg : public AlgInterface {
     public:
         GLCMAlg(cv::InputArray img, int levels = 8, int dx = 1, int dy = 0, ScaleStrategy strategy = ScaleStrategy::ToPowerOfTwo);
@@ -129,11 +131,13 @@ public:
         static AlgRegistry reg;
         return reg;
     }
+
     void Register(T a_name, Creator creator)
     {
-        nameList.emplaceBack(a_name);
+        if(!nameList.contains(a_name)) nameList.emplaceBack(a_name);
         storage[a_name] = creator;
     }
+
     std::shared_ptr<AlgInterface> get(T a_name, cv::InputArray img){
         if(storage.find(a_name) != storage.end()) return storage[a_name](img);
         else {
@@ -141,10 +145,8 @@ public:
             return nullptr;
         }
     }
-    QVector<T> names()
-    {
-        return nameList;
-    }
+
+    QVector<T> names() const { return nameList; }
 
 private:
     QVector<T> nameList;

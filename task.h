@@ -35,8 +35,8 @@ class ProcessingTask : public QObject, public QRunnable {
     Q_OBJECT
 public:
     // 传递算法名称和参考图，而不是直接传递算法实例，以保证线程安全
-    ProcessingTask(QString imgPath, QString algName, cv::Mat refImg)
-        : m_path(imgPath), m_algName(algName), m_refImg(refImg) {
+    ProcessingTask(QString imgPath, QVector<QString> algNames, cv::Mat refImg)
+        : m_path(imgPath), m_algNames(algNames), m_refImg(refImg) {
         setAutoDelete(true);
     }
 
@@ -44,7 +44,7 @@ public:
 
 private:
     QString m_path;
-    QString m_algName;
+    QVector<QString> m_algNames;
     cv::Mat m_refImg;
 
 signals:

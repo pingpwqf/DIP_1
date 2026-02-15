@@ -10,36 +10,46 @@ cv::Mat imread_safe(const QString& path) {
     // Windows 下使用特殊处理确保中文路径可用
     return cv::imread(path.toLocal8Bit().constData(), cv::IMREAD_GRAYSCALE);
 #else
-    return cv::imread(path.toLatin1().data(), cv::IMREAD_GRAYSCALE);
+    return cv::imread(path.toUtf8().data(), cv::IMREAD_GRAYSCALE);
 #endif
 }
 
 void ProcessingTask::run() {
     cv::Mat img = imread_safe(m_path);
-    if (img.empty()) {
-        qDebug() << "Failed to read image:" << m_path;
-        return;
-    }else qDebug() << "get image!";
+    if (img.empty()) return;
 
-    // 在子线程中获取属于自己的算法实例
-    auto alg = AlgRegistry<QString>::instance().get(m_algName, m_refImg);
-    if (!alg) return;
-    else qDebug() << "get alg!";
+    QString fileName = QFileInfo(m_path).fileName();
 
-    double val = 0;
-    // try {
-    if (alg->expectInput()) {
-        val = alg->process(img);
-    } else {
-        // 对于 GLCM 等不直接接受输入的算法，需要针对当前图创建实例
-        auto currentAlg = AlgRegistry<QString>::instance().get(m_algName, img);
-        if (currentAlg) val = currentAlg->process();
+    // --- 优化：局部缓存 GLCM 矩阵 ---
+    std::shared_ptr<GLCM::GLCmat> sharedGlcm = nullptr;
+    bool needsGlcm = m_algNames.contains(CORRNAME) || m_algNames.contains(HOMONAME);
+
+    if (needsGlcm) {
+        // 在该线程内只计算一次 GLCM
+        sharedGlcm = GLCM::getPSGLCM(img, 32, 1, 0, ScaleStrategy::ToPowerOfTwo);
     }
-    qDebug() << "getval:";
-    emit resultReady(m_algName, QFileInfo(m_path).fileName(), val);
-    // } catch (const std::exception& e) {
-    //     qDebug() << "Algorithm error:" << e.what();
-    // }
+
+    // 遍历这张图需要跑的所有算法
+    for (const QString& algName : m_algNames) {
+        double val = 0;
+
+        // 特殊处理 GLCM 提取，避免重复创建算法实例
+        if (algName == CORRNAME && sharedGlcm) {
+            val = sharedGlcm->getCorrelation();
+        }
+        else if (algName == HOMONAME && sharedGlcm) {
+            val = sharedGlcm->getHomogeneity();
+        }
+        else {
+            // 普通算法（NIPC, ZNCC, MSV）
+            auto alg = AlgRegistry<QString>::instance().get(algName, m_refImg);
+            if (alg) {
+                val = alg->process(img);
+            }
+        }
+
+        emit resultReady(algName, fileName, val);
+    }
 }
 
 void TaskManager::ExecuteSelected(const QString& refPath, const QString& dirPath, QVector<QString> selectedAlgs) {
@@ -68,17 +78,14 @@ void TaskManager::ExecuteSelected(const QString& refPath, const QString& dirPath
 
     // QVector<QString> selectedAlgs = AlgRegistry<QString>::instance().names();
 
-    for (QString algName : selectedAlgs) {
-        qDebug() << algName;
-        for (QString fileName : files) {
-            QString fullPath = dir.absoluteFilePath(fileName);
-            ProcessingTask* task = new ProcessingTask(fullPath, algName, refImg);
+    for (const QString& fileName : files) {
+        QString fullPath = dir.absoluteFilePath(fileName);
 
-            connect(task, &ProcessingTask::resultReady, m_collector, &ResultCollector::handleResult);
-            // qDebug() << "ready to allocate a thread";
-            QThreadPool::globalInstance()->start(task);
-            // qDebug() << "run succeed";
-        }
+        // 为每一张图创建一个任务，包含所有选中的算法
+        ProcessingTask* task = new ProcessingTask(fullPath, selectedAlgs, refImg);
+        connect(task, &ProcessingTask::resultReady, m_collector, &ResultCollector::handleResult);
+
+        QThreadPool::globalInstance()->start(task);
     }
 }
 
