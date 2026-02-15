@@ -136,5 +136,6 @@ namespace GLCM {
 
     GLCMAlg::GLCMAlg(cv::InputArray img, int levels, int dx, int dy, ScaleStrategy strategy) {
         m_glcmPtr = getPSGLCM(img, levels, dx, dy, strategy);
+        processInput = false;
     }
 }

@@ -4,6 +4,13 @@
 #include <cmath>
 #include <stdexcept>
 #include <QVector>
+#include <QString>
+
+QString MSVNAME = "MSV",
+        NIPCNAME = "NIPC",
+        ZNCCNAME = "ZNCC",
+        CORRNAME = "GLCMcorr",
+        HOMONAME = "GLCMhomo";
 
 // 策略枚举
 enum class ScaleStrategy {
@@ -22,9 +29,11 @@ public:
      * @param input 输入图像。若算法内置了参考图或 GLCM，则该参数可为空（cv::noArray()）
      */
     virtual double process(cv::InputArray input = cv::noArray()) const = 0;
+    bool expectInput(){return processInput;}
 
 protected:
     AlgInterface() = default;
+    bool processInput = true;
 };
 
 // 基础算法类：负责参考图管理与下采样
@@ -91,7 +100,7 @@ namespace GLCM {
 
     class GLCMAlg : public AlgInterface {
     public:
-        GLCMAlg(cv::InputArray img, int levels, int dx, int dy, ScaleStrategy strategy = ScaleStrategy::ToPowerOfTwo);
+        GLCMAlg(cv::InputArray img, int levels = 8, int dx = 1, int dy = 0, ScaleStrategy strategy = ScaleStrategy::ToPowerOfTwo);
         explicit GLCMAlg(std::shared_ptr<GLCmat> glcmPtr) : m_glcmPtr(glcmPtr) {}
 
     protected:
