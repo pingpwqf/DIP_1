@@ -57,35 +57,29 @@ namespace GLCM {
             double scale = (levels - 1.0) / std::max(maxV - minV, 1.0);
             mat.convertTo(mat, CV_8U, scale, -minV * scale);
         }
-        computeParallel(mat, dx, dy);
+        computeGLCM(mat, dx, dy);
         computeStatistics();
     }
 
-    void GLCmat::computeParallel(const cv::Mat& img, int dx, int dy) {
-        int numThreads = cv::getNumThreads();
-        std::vector<cv::Mat> locals(numThreads);
-        for (auto& m : locals) m = cv::Mat::zeros(m_levels, m_levels, CV_32F);
-
-        cv::parallel_for_(cv::Range(0, img.rows), [&](const cv::Range& range) {
-            int tid = cv::getThreadNum();
-            if (tid < 0 || tid >= (int)locals.size()) return;
-            cv::Mat& myMat = locals[tid];
-
-            for (int y = range.start; y < range.end; ++y) {
-                int ty = y + dy;
-                if (ty < 0 || ty >= img.rows) continue;
-                const uchar* pSrc = img.ptr<uchar>(y);
-                const uchar* pTar = img.ptr<uchar>(ty);
-                for (int x = 0; x < img.cols; ++x) {
-                    int tx = x + dx;
-                    if (tx < 0 || tx >= img.cols) continue;
-                    myMat.at<float>(pSrc[x] % m_levels, pTar[tx] % m_levels)++;
-                }
-            }
-        });
-
+    void GLCmat::computeGLCM(const cv::Mat& img, int dx, int dy) {
         m_glcm = cv::Mat::zeros(m_levels, m_levels, CV_32F);
-        for (const auto& local : locals) m_glcm += local;
+
+        for (int y = 0; y < img.rows; ++y) {
+            int ty = y + dy;
+            if (ty < 0 || ty >= img.rows) continue;
+
+            const uchar* pSrc = img.ptr<uchar>(y);
+            const uchar* pTar = img.ptr<uchar>(ty);
+
+            for (int x = 0; x < img.cols; ++x) {
+                int tx = x + dx;
+                if (tx < 0 || tx >= img.cols) continue;
+
+                int i = pSrc[x] % m_levels;
+                int j = pTar[tx] % m_levels;
+                m_glcm.at<float>(i, j)++;
+            }
+        }
 
         double sumVal = cv::sum(m_glcm)[0];
         if (sumVal > 1e-9) m_glcm /= sumVal;

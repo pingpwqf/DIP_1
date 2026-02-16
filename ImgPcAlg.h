@@ -92,7 +92,7 @@ namespace GLCM {
         double m_meanX = 0, m_meanY = 0;
         double m_varX = 0, m_varY = 0;
 
-        void computeParallel(const cv::Mat& img, int dx, int dy);
+        void computeGLCM(const cv::Mat& img, int dx, int dy);
         void computeStatistics();
     };
 
