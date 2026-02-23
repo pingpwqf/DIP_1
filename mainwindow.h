@@ -2,7 +2,6 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include "ImgPcAlg.h"
 #include "task.h"
 
 QT_BEGIN_NAMESPACE

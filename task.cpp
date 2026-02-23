@@ -1,8 +1,8 @@
 #include "task.h"
 #include <QThreadPool>
 #include <QFileInfo>
-#include <QDir>
 #include <QDebug>
+#include <QCoreApplication>
 
 // 辅助函数：处理 OpenCV 在 Windows 下的中文路径读取问题
 cv::Mat imread_safe(const QString& path) {
@@ -18,7 +18,8 @@ void ProcessingTask::run() {
     try {
         cv::Mat img = imread_safe(m_path);
         if (img.empty()) {
-            qDebug() << "Image is empty:" << m_path;
+            emit resultsSkipped(m_algNames.size());
+            emit finished();
             return;
         }
 
@@ -42,12 +43,11 @@ void ProcessingTask::run() {
             }
             else {
                 auto alg = AlgRegistry<QString>::instance().get(algName, m_refImg);
-                if (alg) {
-                    val = alg->process(img);
-                }
+                if (alg) val = alg->process(img);
             }
             emit resultReady(algName, fileName, val);
         }
+        emit finished();
     }
     catch (const cv::Exception& e) {
         qDebug() << "OpenCV Exception in thread:" << e.what() << "File:" << m_path;
@@ -63,41 +63,36 @@ void ProcessingTask::run() {
     }
 }
 
-void TaskManager::ExecuteSelected(const QString& refPath, const QString& dirPath, QVector<QString> selectedAlgs) {
-    if (refPath.isEmpty() || dirPath.isEmpty()) {
-        qDebug() << "Source or reference path is empty!";
+ProcessingSession* TaskManager::createSession() {
+    return new ProcessingSession(m_collector);
+}
+
+void ProcessingSession::start(const cv::Mat& refImg, const QStringList& files, const QDir& dir, const QVector<QString>& algs) {
+    m_totalTasks = files.size();
+    m_activeTasks = m_totalTasks;
+
+    if (m_totalTasks == 0) {
+        emit sessionFinished();
         return;
     }
 
-    if (selectedAlgs.empty()){
-        qDebug() << "empty choice!";
-        return;
-    }
-
-    QDir dir(dirPath);
-    QStringList files = dir.entryList({"*.bmp", "*.png", "*.jpg"}, QDir::Files);
-    if (files.isEmpty()) {
-        qDebug() << "No valid images found in" << dirPath;
-        return;
-    }
-
-    cv::Mat refImg = imread_safe(refPath);
-    if (refImg.empty()) {
-        qDebug() << "Reference image load failed:" << refPath;
-        return;
-    }
-
-    // QVector<QString> selectedAlgs = AlgRegistry<QString>::instance().names();
+    m_collector->resetExpectedCount(m_totalTasks * algs.size());
 
     for (const QString& fileName : files) {
-        QString fullPath = dir.absoluteFilePath(fileName);
-
-        // 为每一张图创建一个任务，包含所有选中的算法
-        ProcessingTask* task = new ProcessingTask(fullPath, selectedAlgs, refImg);
+        ProcessingTask* task = new ProcessingTask(dir.absoluteFilePath(fileName), algs, refImg);
         connect(task, &ProcessingTask::resultReady, m_collector, &ResultCollector::handleResult);
-
+        // 如果任务内部失败，也要同步计数
+        connect(task, &ProcessingTask::resultsSkipped, m_collector, &ResultCollector::decrementExpectedCount);
+        connect(task, &ProcessingTask::finished, this, &ProcessingSession::onTaskFinished);
         QThreadPool::globalInstance()->start(task);
     }
+}
+
+void ProcessingSession::onTaskFinished() {
+    m_activeTasks--;
+    emit progressUpdated(m_totalTasks - m_activeTasks, m_totalTasks);
+
+    if (m_activeTasks <= 0) emit sessionFinished();
 }
 
 void ResultCollector::prepare() {
@@ -114,7 +109,23 @@ void ResultCollector::prepare() {
     }
 }
 
+void ResultCollector::resetExpectedCount(int count) {
+    QMutexLocker locker(&m_mutex);
+    m_expectedResults = count;
+}
+
+void ResultCollector::decrementExpectedCount(int count) {
+    QMutexLocker locker(&m_mutex);
+    m_expectedResults -= count;
+    if (m_expectedResults <= 0) {
+        // 虽然在子线程，但因为是 DirectConnection 或简单计数，我们最好通过信号去通知
+        QMetaObject::invokeMethod(this, "allResultsSaved", Qt::QueuedConnection);
+    }
+}
+
 void ResultCollector::handleResult(QString algName, QString fileName, double value) {
+    QMutexLocker locker(&m_mutex);
+
     if (!m_streams.contains(algName)) {
         QString fullPath = m_outputDir + "/" + algName + ".csv"; // 建议用 csv 方便表格打开
         auto file = QSharedPointer<QFile>::create(fullPath);
@@ -127,6 +138,7 @@ void ResultCollector::handleResult(QString algName, QString fileName, double val
             if (isNew) *stream << "FileName,Value\n";
             m_streams[algName] = stream;
         } else {
+            m_expectedResults--;
             qDebug() << "Failed to open output file:" << fullPath;
             return;
         }
@@ -134,14 +146,34 @@ void ResultCollector::handleResult(QString algName, QString fileName, double val
 
     if (m_streams.contains(algName)) {
         *m_streams[algName] << fileName << "," << QString::number(value, 'f', 6) << "\n";
-        m_streams[algName]->flush(); // 强制刷盘，防止崩溃丢失数据
+        // m_streams[algName]->flush(); // 强制刷盘，防止崩溃丢失数据
+    }
+
+    m_expectedResults--;
+    if (m_expectedResults <= 0) {
+        emit allResultsSaved();
     }
 }
 
 void ResultCollector::closeAll() {
+    QMutexLocker locker(&m_mutex);
+
     m_streams.clear();
-    for (auto f : m_files) {
-        if (f->isOpen()) f->close();
+
+    auto keys = m_files.keys();
+    for (const QString& key : keys) {
+        auto file = m_files.take(key); // 从 Map 中取出并移除，确保引用计数减少
+        if (file && file->isOpen()) {
+            file->flush(); // 强制刷入操作系统缓存
+            file->close(); // 显式关闭句柄
+        }
+        // QSharedPointer 离开作用域或被重置后，底层 QFile 会被彻底销毁
     }
     m_files.clear();
+    QCoreApplication::processEvents();
+}
+
+void ResultCollector::setOutputDir(QString path) {
+    QMutexLocker locker(&m_mutex);
+    m_outputDir = path;
 }

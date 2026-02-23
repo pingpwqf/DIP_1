@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "ImgPcAlg.h"
 #include "ui_mainwindow.h"
 
 #include <QFileDialog>
@@ -12,7 +13,6 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     taskEngine = std::make_unique<TaskManager>(&collector);
-    QThreadPool::globalInstance()->setMaxThreadCount(5);
 
     connect(ui->pushButton, SIGNAL(clicked(bool)), this, SLOT(showFile()));
     connect(ui->pushButton_2, SIGNAL(clicked(bool)), this, SLOT(showDir()));
@@ -87,18 +87,32 @@ void MainWindow::showOutDir()
 void MainWindow::MainExecute()
 {
     if(dirOutPath.isEmpty()) qDebug()<< "haven't select output path";
+
+    ui->pushButton_4->setEnabled(false); // 冻结按钮
     collector.setOutputDir(dirOutPath);
     collector.prepare();
-    if(ui->actionMSV->isChecked()){
-        selectedChoices.emplaceBack(MSVNAME);
-        qDebug() << "MSV";
-    }
+
+    ProcessingSession* session = taskEngine->createSession();
+
+    connect(session, &ProcessingSession::sessionFinished, this, [this, session](){
+        ui->pushButton_4->setEnabled(true); // 解冻
+        collector.closeAll();               // 关闭文件
+        ui->statusbar->showMessage(tr("批处理完成！"), 5000);
+
+        session->deleteLater(); // 销毁 Session 对象
+    });
+
+    QDir dir(dirPath);
+    QStringList files = dir.entryList({"*.bmp", "*.png", "*.jpg"}, QDir::Files);
+    cv::Mat refImg = imread_safe(filePath);
+
+    if(ui->actionMSV->isChecked())selectedChoices.emplaceBack(MSVNAME);
     if(ui->actionNIPC->isChecked())selectedChoices.emplaceBack(NIPCNAME);
     if(ui->actionZNCC->isChecked())selectedChoices.emplaceBack(ZNCCNAME);
     if(ui->actionCorrelation->isChecked())selectedChoices.emplaceBack(CORRNAME);
     if(ui->actionHomogeneity->isChecked())selectedChoices.emplaceBack(HOMONAME);
-    taskEngine->ExecuteSelected(filePath, dirPath, selectedChoices);
-    ui->statusbar->showMessage(tr("完成"), 2000);
+    // taskEngine->ExecuteSelected(filePath, dirPath, selectedChoices);
+    session->start(refImg, files, dir, selectedChoices);
 }
 
 MainWindow::~MainWindow()

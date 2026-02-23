@@ -7,7 +7,12 @@
 #include <QTextStream>
 #include <QMap>
 #include <QSharedPointer>
+#include <QDir>
+#include <QMutex>
+
 #include "ImgPcAlg.h"
+
+cv::Mat imread_safe(const QString& path);
 
 // 结果收集器：负责将不同线程产生的数据分类写入文件
 class ResultCollector : public QObject {
@@ -16,18 +21,26 @@ public:
     explicit ResultCollector(QObject* parent = nullptr) : QObject(parent) {}
     ~ResultCollector() { closeAll(); }
 
-    void setOutputDir(QString path) { m_outputDir = path; }
+    void setOutputDir(QString path);
     void prepare(); // 准备工作：检查并创建目录
     void closeAll();
+    void resetExpectedCount(int count);
+    void decrementExpectedCount(int count);
 
 public slots:
     // 增加 fileName 参数，让结果知道对应哪张图
     void handleResult(QString algName, QString fileName, double value);
 
 private:
+    QMutex m_mutex;
+    int m_expectedResults;
+
     QString m_outputDir;
     QMap<QString, QSharedPointer<QFile>> m_files;
     QMap<QString, QSharedPointer<QTextStream>> m_streams;
+
+signals:
+    void allResultsSaved();
 };
 
 // 具体的处理任务
@@ -49,7 +62,30 @@ private:
 
 signals:
     void resultReady(QString algName, QString fileName, double value);
+    void finished();
     void errorOccurred(QString msg);
+    void resultsSkipped(unsigned size);
+};
+
+class ProcessingSession : public QObject {
+    Q_OBJECT
+public:
+    explicit ProcessingSession(ResultCollector* rc, QObject* parent = nullptr)
+        : QObject(parent), m_collector(rc), m_activeTasks(0) {}
+
+    void start(const cv::Mat& refImg, const QStringList& files, const QDir& dir, const QVector<QString>& algs);
+
+signals:
+    void sessionFinished(); // 整个批处理完成
+    void progressUpdated(int current, int total); // 可选：进度条支持
+
+private slots:
+    void onTaskFinished();
+
+private:
+    ResultCollector* m_collector;
+    int m_activeTasks;
+    int m_totalTasks;
 };
 
 // 任务管理器
@@ -58,7 +94,8 @@ class TaskManager : public QObject
     Q_OBJECT
 public:
     TaskManager(ResultCollector* rc) : m_collector(rc) {}
-    void ExecuteSelected(const QString& refPath, const QString& dirPath, QVector<QString> selectedAlgs);
+    // void ExecuteSelected(const QString& refPath, const QString& dirPath, QVector<QString> selectedAlgs);
+    ProcessingSession* createSession();
 
 private:
     ResultCollector* m_collector;
