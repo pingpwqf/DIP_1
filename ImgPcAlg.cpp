@@ -5,7 +5,7 @@ QString MSVNAME = "MSV",
     ZNCCNAME = "ZNCC";
 
 PreTreatClass<PreTreatMethod::Classic> globalScheme;
-const double threshold = 0.25;
+const double threshold = 0.02;
 
 void applyThreshold(cv::UMat& m, double ratio)
 {
@@ -42,8 +42,8 @@ cv::UMat preTreat(const cv::UMat& src, PreTreatClass<PreTreatMethod::Classic> Sc
 BaseAlg::BaseAlg(cv::InputArray img, int f) : m_factor(std::max(1, f)) {
     if (img.empty()) throw std::invalid_argument("Reference image is empty.");
     img.getUMat().convertTo(m_refImg, CV_32F);
-    m_refImg = preTreat(m_refImg);
-    downsample(m_refImg, m_downRef);
+    cv::UMat tmpImg = preTreat(m_refImg);
+    downsample(tmpImg, m_downRef);
 }
 
 void BaseAlg::downsample(const cv::UMat& src, cv::UMat& dst) const {

@@ -15,40 +15,51 @@ cv::Mat imread_safe(const QString& path) {
 }
 
 void ProcessingTask::run() {
-    cv::Mat img = imread_safe(m_path);
-    if (img.empty()) return;
-
-    QString fileName = QFileInfo(m_path).fileName();
-
-    // --- 优化：局部缓存 GLCM 矩阵 ---
-    std::shared_ptr<GLCM::GLCmat> sharedGlcm = nullptr;
-    bool needsGlcm = m_algNames.contains(CORRNAME) || m_algNames.contains(HOMONAME);
-
-    if (needsGlcm) {
-        // 在该线程内只计算一次 GLCM
-        sharedGlcm = GLCM::getPSGLCM(img, 32, 1, 0, ScaleStrategy::ToPowerOfTwo);
-    }
-
-    // 遍历这张图需要跑的所有算法
-    for (const QString& algName : m_algNames) {
-        double val = 0;
-
-        // 特殊处理 GLCM 提取，避免重复创建算法实例
-        if (algName == CORRNAME && sharedGlcm) {
-            val = sharedGlcm->getCorrelation();
+    try {
+        cv::Mat img = imread_safe(m_path);
+        if (img.empty()) {
+            qDebug() << "Image is empty:" << m_path;
+            return;
         }
-        else if (algName == HOMONAME && sharedGlcm) {
-            val = sharedGlcm->getHomogeneity();
+
+        QString fileName = QFileInfo(m_path).fileName();
+
+        // GLCM 缓存逻辑
+        std::shared_ptr<GLCM::GLCmat> sharedGlcm = nullptr;
+        bool needsGlcm = m_algNames.contains(CORRNAME) || m_algNames.contains(HOMONAME);
+
+        if (needsGlcm) {
+            sharedGlcm = GLCM::getPSGLCM(img, 32, 1, 0, ScaleStrategy::ToPowerOfTwo);
         }
-        else {
-            // 普通算法（NIPC, ZNCC, MSV）
-            auto alg = AlgRegistry<QString>::instance().get(algName, m_refImg);
-            if (alg) {
-                val = alg->process(img);
+
+        for (const QString& algName : m_algNames) {
+            double val = 0;
+            if (algName == CORRNAME && sharedGlcm) {
+                val = sharedGlcm->getCorrelation();
             }
+            else if (algName == HOMONAME && sharedGlcm) {
+                val = sharedGlcm->getHomogeneity();
+            }
+            else {
+                auto alg = AlgRegistry<QString>::instance().get(algName, m_refImg);
+                if (alg) {
+                    val = alg->process(img);
+                }
+            }
+            emit resultReady(algName, fileName, val);
         }
-
-        emit resultReady(algName, fileName, val);
+    }
+    catch (const cv::Exception& e) {
+        qDebug() << "OpenCV Exception in thread:" << e.what() << "File:" << m_path;
+        emit errorOccurred(QString("OpenCV Error: %1").arg(e.what()));
+    }
+    catch (const std::exception& e) {
+        qDebug() << "Standard Exception in thread:" << e.what() << "File:" << m_path;
+        emit errorOccurred(QString("Error: %1").arg(e.what()));
+    }
+    catch (...) {
+        qDebug() << "Unknown Exception in thread. File:" << m_path;
+        emit errorOccurred("Unknown Error occurred during processing.");
     }
 }
 
