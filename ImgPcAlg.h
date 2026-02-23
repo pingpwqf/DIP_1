@@ -17,6 +17,15 @@ enum class ScaleStrategy {
     ByFactor      // 固定比例
 };
 
+enum class PreTreatMethod {
+    Classic
+};
+
+template<PreTreatMethod method>
+class PreTreatClass {
+    PreTreatMethod m = method;
+};
+
 // 接口层：统一处理逻辑
 class AlgInterface {
 public:
@@ -46,6 +55,7 @@ protected:
 
     void downsample(const cv::UMat& src, cv::UMat& dst) const;
     cv::UMat prepareInput(cv::InputArray input) const;
+    // cv::UMat preTreat(const cv::UMat& src, PreTreatClass<PreTreatMethod::Classic> Scheme);
 
     // 检查输入有效性
     void ensureInputNotEmpty(cv::InputArray input) const {
@@ -124,7 +134,7 @@ template<typename T>
 class AlgRegistry
 {
 public:
-    using Creator = std::function<std::shared_ptr<AlgInterface>(cv::InputArray)>;
+    using Creator = std::function<std::unique_ptr<AlgInterface>(cv::InputArray)>;
 
     static AlgRegistry& instance()
     {
@@ -138,7 +148,7 @@ public:
         storage[a_name] = creator;
     }
 
-    std::shared_ptr<AlgInterface> get(T a_name, cv::InputArray img){
+    std::unique_ptr<AlgInterface> get(T a_name, cv::InputArray img){
         if(storage.find(a_name) != storage.end()) return storage[a_name](img);
         else {
             qDebug() << "storage is full";

@@ -4,9 +4,45 @@ QString MSVNAME = "MSV",
     NIPCNAME = "NIPC",
     ZNCCNAME = "ZNCC";
 
+PreTreatClass<PreTreatMethod::Classic> globalScheme;
+const double threshold = 0.25;
+
+void applyThreshold(cv::UMat& m, double ratio)
+{
+    double maxVal;
+    cv::minMaxLoc(m, nullptr, &maxVal);
+    cv::threshold(m, m, maxVal * ratio, 0, cv::THRESH_TOZERO);
+}
+
+cv::UMat preTreat(const cv::UMat& src, PreTreatClass<PreTreatMethod::Classic> Scheme = globalScheme)
+{
+    // f(x+1, y+1)
+    cv::Rect r1(1, 1, src.cols - 1, src.rows - 1);
+    cv::Rect r_tl(0, 0, src.cols - 1, src.rows - 1); // 对应 f(x,y) 的匹配区域
+
+    // f(x+1, y) 和 f(x, y+1)
+    cv::Rect r_x1(1, 0, src.cols - 1, src.rows - 1);
+    cv::Rect r_y1(0, 1, src.cols - 1, src.rows - 1);
+
+    cv::UMat diff1, diff2, grad;
+
+    // 计算 |f(x,y) - f(x+1,y+1)| [cite: 167]
+    cv::absdiff(src(r_tl), src(r1), diff1);
+
+    // 计算 |f(x+1,y) - f(x,y+1)| [cite: 168]
+    cv::absdiff(src(r_x1), src(r_y1), diff2);
+
+    // 求和得到最终梯度 G [cite: 168]
+    cv::add(diff1, diff2, grad);
+    applyThreshold(grad, threshold);
+
+    return grad;
+}
+
 BaseAlg::BaseAlg(cv::InputArray img, int f) : m_factor(std::max(1, f)) {
     if (img.empty()) throw std::invalid_argument("Reference image is empty.");
     img.getUMat().convertTo(m_refImg, CV_32F);
+    m_refImg = preTreat(m_refImg);
     downsample(m_refImg, m_downRef);
 }
 
@@ -35,7 +71,8 @@ NIPCAlg::NIPCAlg(cv::InputArray img, int f) : BaseAlg(img, f) {
 double NIPCAlg::process(cv::InputArray input) const {
     ensureInputNotEmpty(input);
     cv::UMat inDown;
-    downsample(prepareInput(input), inDown);
+    cv::UMat img = prepareInput(input);
+    downsample(preTreat(img), inDown);
     double inNorm = cv::norm(inDown, cv::NORM_L2);
     if (inNorm < 1e-9) return 0.0;
     return m_downRef.dot(inDown) / (m_refNorm * inNorm);
@@ -45,7 +82,8 @@ double NIPCAlg::process(cv::InputArray input) const {
 double ZNCCAlg::process(cv::InputArray input) const {
     ensureInputNotEmpty(input);
     cv::UMat downInput;
-    downsample(prepareInput(input), downInput);
+    cv::UMat img(prepareInput(input));
+    downsample(preTreat(img), downInput);
 
     cv::UMat result;
     cv::matchTemplate(downInput, m_downRef, result, cv::TM_CCOEFF_NORMED);
