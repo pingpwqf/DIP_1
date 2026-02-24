@@ -4,6 +4,7 @@
 
 #include <QFileDialog>
 #include <QThreadPool>
+#include <QMessageBox>
 
 cv::Mat testImage = cv::Mat::ones(3, 3, CV_8UC1);
 
@@ -17,6 +18,16 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->pushButton, SIGNAL(clicked(bool)), this, SLOT(showFile()));
     connect(ui->pushButton_2, SIGNAL(clicked(bool)), this, SLOT(showDir()));
     connect(ui->pushButton_5, SIGNAL(clicked(bool)), this, SLOT(showOutDir()));
+    connect(ui->pushButton_3, &QPushButton::clicked, this, [this](){
+        ui->pushButton_4->setEnabled(true);
+        if (taskEngine) {
+            auto res = QMessageBox::warning(this, "取消", "停止处理！");
+        } else {
+            // 若未运行，则执行重置逻辑：清空路径
+            ui->fileLineEdit->clear();
+            ui->dirLineEdit->clear();
+        }
+    });
 
     // connect(ui->actionMSV, &QAction::toggled,
     //         this, &MainWindow::registerMSV);
@@ -93,6 +104,7 @@ void MainWindow::MainExecute()
     collector.prepare();
 
     ProcessingSession* session = taskEngine->createSession();
+    connect(ui->pushButton_3, &QPushButton::clicked, session, &ProcessingSession::cancel);
 
     connect(session, &ProcessingSession::sessionFinished, this, [this, session](){
         ui->pushButton_4->setEnabled(true); // 解冻

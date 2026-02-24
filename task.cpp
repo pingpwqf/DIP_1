@@ -15,6 +15,12 @@ cv::Mat imread_safe(const QString& path) {
 }
 
 void ProcessingTask::run() {
+    if (m_sessionHandle && m_sessionHandle->IsCancelled()) {
+        emit resultsSkipped(m_algNames.size());
+        emit finished();
+        return;
+    }
+
     try {
         cv::Mat img = imread_safe(m_path);
         if (img.empty()) {
@@ -34,6 +40,9 @@ void ProcessingTask::run() {
         }
 
         for (const QString& algName : m_algNames) {
+            if (m_sessionHandle && m_sessionHandle->IsCancelled()) break;
+
+            if(m_sessionHandle->IsCancelled()) return;
             double val = 0;
             if (algName == CORRNAME && sharedGlcm) {
                 val = sharedGlcm->getCorrelation();
@@ -47,20 +56,16 @@ void ProcessingTask::run() {
             }
             emit resultReady(algName, fileName, val);
         }
-        emit finished();
-    }
-    catch (const cv::Exception& e) {
-        qDebug() << "OpenCV Exception in thread:" << e.what() << "File:" << m_path;
-        emit errorOccurred(QString("OpenCV Error: %1").arg(e.what()));
     }
     catch (const std::exception& e) {
-        qDebug() << "Standard Exception in thread:" << e.what() << "File:" << m_path;
-        emit errorOccurred(QString("Error: %1").arg(e.what()));
+        qDebug() << "Task Error:" << e.what();
+        emit resultsSkipped(m_algNames.size());
     }
     catch (...) {
-        qDebug() << "Unknown Exception in thread. File:" << m_path;
-        emit errorOccurred("Unknown Error occurred during processing.");
+        emit resultsSkipped(m_algNames.size());
     }
+
+    emit finished();
 }
 
 ProcessingSession* TaskManager::createSession() {
@@ -79,7 +84,15 @@ void ProcessingSession::start(const cv::Mat& refImg, const QStringList& files, c
     m_collector->resetExpectedCount(m_totalTasks * algs.size());
 
     for (const QString& fileName : files) {
+        if(m_isCancelled.load()) {
+            // 补偿未提交任务的计数，确保 activeTasks 最终能归零
+            m_activeTasks--;
+            m_collector->decrementExpectedCount(algs.size());
+            continue;
+        }
+
         ProcessingTask* task = new ProcessingTask(dir.absoluteFilePath(fileName), algs, refImg);
+        task->setSession(this);
         connect(task, &ProcessingTask::resultReady, m_collector, &ResultCollector::handleResult);
         // 如果任务内部失败，也要同步计数
         connect(task, &ProcessingTask::resultsSkipped, m_collector, &ResultCollector::decrementExpectedCount);
@@ -95,6 +108,21 @@ void ProcessingSession::onTaskFinished() {
     if (m_activeTasks <= 0) emit sessionFinished();
 }
 
+void ProcessingSession::cancel() {
+    m_isCancelled = true;
+    if (m_collector) {
+        m_collector->abort(); // 立即强行释放文件句柄
+    }
+}
+
+/*****************
+ *ResultCollector*
+ *****************/
+void ResultCollector::setOutputDir(QString path) {
+    QMutexLocker locker(&m_mutex);
+    m_outputDir = path;
+}
+
 void ResultCollector::prepare() {
     closeAll();
     if (!m_outputDir.isEmpty()) {
@@ -107,6 +135,28 @@ void ResultCollector::prepare() {
             }
         }
     }
+}
+
+void ResultCollector::closeAll() {
+    QMutexLocker locker(&m_mutex);
+
+    m_streams.clear();
+
+    for (auto f : m_files) {
+        if (f && f->isOpen()) {
+            f->flush(); // 显式刷盘
+            f->close();
+        }
+    }
+    m_files.clear();
+    // QCoreApplication::processEvents();
+}
+
+void ResultCollector::abort(){
+    QMutexLocker locker(&m_mutex);
+    m_isAborted = true;
+    m_expectedResults = 0; // 清空预期，防止后续 handleResult 继续工作
+    closeAll();            // 立即关闭所有文件句柄
 }
 
 void ResultCollector::resetExpectedCount(int count) {
@@ -125,6 +175,11 @@ void ResultCollector::decrementExpectedCount(int count) {
 
 void ResultCollector::handleResult(QString algName, QString fileName, double value) {
     QMutexLocker locker(&m_mutex);
+
+    if (m_isAborted) {
+        m_expectedResults--;
+        return;
+    }
 
     if (!m_streams.contains(algName)) {
         QString fullPath = m_outputDir + "/" + algName + ".csv"; // 建议用 csv 方便表格打开
@@ -153,27 +208,4 @@ void ResultCollector::handleResult(QString algName, QString fileName, double val
     if (m_expectedResults <= 0) {
         emit allResultsSaved();
     }
-}
-
-void ResultCollector::closeAll() {
-    QMutexLocker locker(&m_mutex);
-
-    m_streams.clear();
-
-    auto keys = m_files.keys();
-    for (const QString& key : keys) {
-        auto file = m_files.take(key); // 从 Map 中取出并移除，确保引用计数减少
-        if (file && file->isOpen()) {
-            file->flush(); // 强制刷入操作系统缓存
-            file->close(); // 显式关闭句柄
-        }
-        // QSharedPointer 离开作用域或被重置后，底层 QFile 会被彻底销毁
-    }
-    m_files.clear();
-    QCoreApplication::processEvents();
-}
-
-void ResultCollector::setOutputDir(QString path) {
-    QMutexLocker locker(&m_mutex);
-    m_outputDir = path;
 }

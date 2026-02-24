@@ -24,6 +24,8 @@ public:
     void setOutputDir(QString path);
     void prepare(); // 准备工作：检查并创建目录
     void closeAll();
+    void abort();
+
     void resetExpectedCount(int count);
     void decrementExpectedCount(int count);
 
@@ -33,7 +35,8 @@ public slots:
 
 private:
     QMutex m_mutex;
-    int m_expectedResults;
+    std::atomic<int> m_expectedResults{0};
+    std::atomic<bool> m_isAborted{false};
 
     QString m_outputDir;
     QMap<QString, QSharedPointer<QFile>> m_files;
@@ -43,19 +46,23 @@ signals:
     void allResultsSaved();
 };
 
+class ProcessingSession;
 // 具体的处理任务
 class ProcessingTask : public QObject, public QRunnable {
     Q_OBJECT
 public:
     // 传递算法名称和参考图，而不是直接传递算法实例，以保证线程安全
     ProcessingTask(QString imgPath, QVector<QString> algNames, cv::Mat refImg)
-        : m_path(imgPath), m_algNames(algNames), m_refImg(refImg) {
+        : m_path(imgPath), m_algNames(algNames), m_refImg(refImg), m_sessionHandle(nullptr) {
         setAutoDelete(true);
     }
 
     void run() override;
+    void setSession(ProcessingSession* sessionptr) {m_sessionHandle = sessionptr;}
 
 private:
+    ProcessingSession* m_sessionHandle;
+
     QString m_path;
     QVector<QString> m_algNames;
     cv::Mat m_refImg;
@@ -71,10 +78,10 @@ class ProcessingSession : public QObject {
     Q_OBJECT
 public:
     explicit ProcessingSession(ResultCollector* rc, QObject* parent = nullptr)
-        : QObject(parent), m_collector(rc), m_activeTasks(0) {}
+        : QObject(parent), m_collector(rc), m_activeTasks(0), m_totalTasks(0) {}
 
     void start(const cv::Mat& refImg, const QStringList& files, const QDir& dir, const QVector<QString>& algs);
-
+    bool IsCancelled() const {return m_isCancelled.load();}
 signals:
     void sessionFinished(); // 整个批处理完成
     void progressUpdated(int current, int total); // 可选：进度条支持
@@ -82,7 +89,12 @@ signals:
 private slots:
     void onTaskFinished();
 
+public slots:
+    void cancel();
+
 private:
+    std::atomic<bool> m_isCancelled{false};
+
     ResultCollector* m_collector;
     int m_activeTasks;
     int m_totalTasks;
