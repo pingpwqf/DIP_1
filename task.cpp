@@ -3,9 +3,11 @@
 #include <QFileInfo>
 #include <QDebug>
 #include <QCoreApplication>
+#include <QMessageBox>
 
 // 辅助函数：处理 OpenCV 在 Windows 下的中文路径读取问题
-cv::Mat imread_safe(const QString& path) {
+cv::Mat imread_safe(const QString& path)
+{
 #ifdef Q_OS_WIN
     // Windows 下使用特殊处理确保中文路径可用
     return cv::imread(path.toLocal8Bit().constData(), cv::IMREAD_GRAYSCALE);
@@ -14,7 +16,8 @@ cv::Mat imread_safe(const QString& path) {
 #endif
 }
 
-void ProcessingTask::run() {
+void ProcessingTask::run()
+{
     if (m_sessionHandle && m_sessionHandle->IsCancelled()) {
         emit resultsSkipped(m_algNames.size());
         emit finished();
@@ -58,7 +61,8 @@ void ProcessingTask::run() {
         }
     }
     catch (const std::exception& e) {
-        qDebug() << "Task Error:" << e.what();
+        QMessageBox::warning(nullptr, "TaskError",
+                             tr(e.what()));
         emit resultsSkipped(m_algNames.size());
     }
     catch (...) {
@@ -68,11 +72,13 @@ void ProcessingTask::run() {
     emit finished();
 }
 
-ProcessingSession* TaskManager::createSession() {
+ProcessingSession* TaskManager::createSession()
+{
     return new ProcessingSession(m_collector);
 }
 
-void ProcessingSession::start(const cv::Mat& refImg, const QStringList& files, const QDir& dir, const QVector<QString>& algs) {
+void ProcessingSession::start(const cv::Mat& refImg, const QStringList& files, const QDir& dir, const QVector<QString>& algs)
+{
     m_totalTasks = files.size();
     m_activeTasks = m_totalTasks;
 
@@ -101,14 +107,16 @@ void ProcessingSession::start(const cv::Mat& refImg, const QStringList& files, c
     }
 }
 
-void ProcessingSession::onTaskFinished() {
+void ProcessingSession::onTaskFinished()
+{
     m_activeTasks--;
     emit progressUpdated(m_totalTasks - m_activeTasks, m_totalTasks);
 
     if (m_activeTasks <= 0) emit sessionFinished();
 }
 
-void ProcessingSession::cancel() {
+void ProcessingSession::cancel()
+{
     m_isCancelled = true;
     if (m_collector) {
         m_collector->abort(); // 立即强行释放文件句柄
@@ -118,26 +126,29 @@ void ProcessingSession::cancel() {
 /*****************
  *ResultCollector*
  *****************/
-void ResultCollector::setOutputDir(QString path) {
+void ResultCollector::setOutputDir(QString path)
+{
     QMutexLocker locker(&m_mutex);
     m_outputDir = path;
 }
 
-void ResultCollector::prepare() {
+void ResultCollector::prepare()
+{
     closeAll();
     if (!m_outputDir.isEmpty()) {
         QDir dir;
         if (!dir.exists(m_outputDir)) {
-            if (dir.mkpath(m_outputDir)) {
-                qDebug() << "Created output directory:" << m_outputDir;
-            } else {
-                qDebug() << "Critical: Could not create output directory!";
-            }
+            // if (dir.mkpath(m_outputDir)) {
+            //     qDebug() << "Created output directory:" << m_outputDir;
+            // } else {
+            //     qDebug() << "Critical: Could not create output directory!";
+            // }
         }
     }
 }
 
-void ResultCollector::closeAll() {
+void ResultCollector::closeAll()
+{
     QMutexLocker locker(&m_mutex);
 
     m_streams.clear();
@@ -152,19 +163,22 @@ void ResultCollector::closeAll() {
     // QCoreApplication::processEvents();
 }
 
-void ResultCollector::abort(){
+void ResultCollector::abort()
+{
     QMutexLocker locker(&m_mutex);
     m_isAborted = true;
     m_expectedResults = 0; // 清空预期，防止后续 handleResult 继续工作
     closeAll();            // 立即关闭所有文件句柄
 }
 
-void ResultCollector::resetExpectedCount(int count) {
+void ResultCollector::resetExpectedCount(int count)
+{
     QMutexLocker locker(&m_mutex);
     m_expectedResults = count;
 }
 
-void ResultCollector::decrementExpectedCount(int count) {
+void ResultCollector::decrementExpectedCount(int count)
+{
     QMutexLocker locker(&m_mutex);
     m_expectedResults -= count;
     if (m_expectedResults <= 0) {
@@ -173,7 +187,8 @@ void ResultCollector::decrementExpectedCount(int count) {
     }
 }
 
-void ResultCollector::handleResult(QString algName, QString fileName, double value) {
+void ResultCollector::handleResult(QString algName, QString fileName, double value)
+{
     QMutexLocker locker(&m_mutex);
 
     if (m_isAborted) {
@@ -194,7 +209,9 @@ void ResultCollector::handleResult(QString algName, QString fileName, double val
             m_streams[algName] = stream;
         } else {
             m_expectedResults--;
-            qDebug() << "Failed to open output file:" << fullPath;
+            auto info = "Failed to open output file:" + fullPath;
+            QMessageBox::warning(nullptr, "fail",
+                                 tr(info.toLatin1()));
             return;
         }
     }

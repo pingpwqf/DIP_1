@@ -6,8 +6,6 @@
 #include <QThreadPool>
 #include <QMessageBox>
 
-cv::Mat testImage = cv::Mat::ones(3, 3, CV_8UC1);
-
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
@@ -15,13 +13,14 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
     taskEngine = std::make_unique<TaskManager>(&collector);
 
-    connect(ui->pushButton, SIGNAL(clicked(bool)), this, SLOT(showFile()));
-    connect(ui->pushButton_2, SIGNAL(clicked(bool)), this, SLOT(showDir()));
-    connect(ui->pushButton_5, SIGNAL(clicked(bool)), this, SLOT(showOutDir()));
+    connect(ui->pushButton, &QPushButton::clicked, this, &MainWindow::showFile);
+    connect(ui->pushButton_2, &QPushButton::clicked, this, &MainWindow::showDir);
+    connect(ui->pushButton_5, &QPushButton::clicked, this, &MainWindow::showOutDir);
+    connect(ui->actionROI, &QAction::changed, this, &MainWindow::selectROI);
     connect(ui->pushButton_3, &QPushButton::clicked, this, [this](){
         ui->pushButton_4->setEnabled(true);
         if (taskEngine) {
-            auto res = QMessageBox::warning(this, "取消", "停止处理！");
+            auto canc = QMessageBox::warning(this, "cancel", "stop processing！");
         } else {
             // 若未运行，则执行重置逻辑：清空路径
             ui->fileLineEdit->clear();
@@ -47,8 +46,6 @@ MainWindow::MainWindow(QWidget *parent)
         return std::make_unique<GLCM::GLCMhomoAlg>(img);
     });
 
-    // connect(ui->pushButton_4, &QPushButton::clicked,
-    //         this, &MainWindow::check);
     connect(ui->pushButton_4, &QPushButton::clicked,
             this, &MainWindow::MainExecute);
 }
@@ -74,57 +71,53 @@ void MainWindow::showOutDir()
     ui->dirLineEdit_2->setText(dirOutPath);
 }
 
-// void MainWindow::registerGLCMhomo()
-// {
-//     reg.Register(HOMONAME, [](cv::InputArray img){
-//         return std::make_unique<GLCM::GLCMhomoAlg>(img, 32, 1, 0);
-//     });
-//     QString filename = dirOutPath + "/" + HOMONAME + ".txt";
-//     QFile HOMOfile(filename);
-//     if(HOMOfile.exists()) outFileList.append(filename);
-// }
+void MainWindow::selectROI()
+{
+    if(ui->actionROI->isChecked()){
 
-// void MainWindow::check()
-// {
-//     basePtr->checkAlg();
-//     QFile file1(outFileList[0]);
-//     file1.open(QIODevice::WriteOnly | QIODevice::Text);
-//     QTextStream outMSV(&file1);
-//     outMSV.setAutoDetectUnicode(true);
-//     outMSV << "output\n";
-//     Qt::flush(outMSV);
-// }
+    }
+}
 
 void MainWindow::MainExecute()
 {
-    if(dirOutPath.isEmpty()) qDebug()<< "haven't select output path";
+    if(filePath.isEmpty()) QMessageBox::warning(this, "noRef",
+                             tr("haven't select reference image!"));
+    else if(dirPath.isEmpty()) QMessageBox::warning(this, "noSource",
+                             tr("haven't select Source images!"));
+    else if(dirOutPath.isEmpty()) QMessageBox::warning(this, "noOutPath",
+                             tr("haven't select output path!"));
+    else{
+        ui->pushButton_4->setEnabled(false); // 冻结按钮
+        collector.setOutputDir(dirOutPath);
+        collector.prepare();
 
-    ui->pushButton_4->setEnabled(false); // 冻结按钮
-    collector.setOutputDir(dirOutPath);
-    collector.prepare();
+        ProcessingSession* session = taskEngine->createSession();
+        connect(ui->pushButton_3, &QPushButton::clicked, session, &ProcessingSession::cancel);
 
-    ProcessingSession* session = taskEngine->createSession();
-    connect(ui->pushButton_3, &QPushButton::clicked, session, &ProcessingSession::cancel);
+        connect(session, &ProcessingSession::sessionFinished, this, [this, session](){
+            ui->pushButton_4->setEnabled(true); // 解冻
+            collector.closeAll();               // 关闭文件
+            ui->statusbar->showMessage(tr("批处理完成！"), 5000);
 
-    connect(session, &ProcessingSession::sessionFinished, this, [this, session](){
-        ui->pushButton_4->setEnabled(true); // 解冻
-        collector.closeAll();               // 关闭文件
-        ui->statusbar->showMessage(tr("批处理完成！"), 5000);
+            session->deleteLater(); // 销毁 Session 对象
+        });
 
-        session->deleteLater(); // 销毁 Session 对象
-    });
+        QDir dir(dirPath);
+        QStringList files = dir.entryList({"*.bmp", "*.png", "*.jpg"}, QDir::Files);
+        cv::Mat refImg = imread_safe(filePath);
 
-    QDir dir(dirPath);
-    QStringList files = dir.entryList({"*.bmp", "*.png", "*.jpg"}, QDir::Files);
-    cv::Mat refImg = imread_safe(filePath);
-
-    if(ui->actionMSV->isChecked())selectedChoices.emplaceBack(MSVNAME);
-    if(ui->actionNIPC->isChecked())selectedChoices.emplaceBack(NIPCNAME);
-    if(ui->actionZNCC->isChecked())selectedChoices.emplaceBack(ZNCCNAME);
-    if(ui->actionCorrelation->isChecked())selectedChoices.emplaceBack(CORRNAME);
-    if(ui->actionHomogeneity->isChecked())selectedChoices.emplaceBack(HOMONAME);
-    // taskEngine->ExecuteSelected(filePath, dirPath, selectedChoices);
-    session->start(refImg, files, dir, selectedChoices);
+        if(ui->actionMSV->isChecked())selectedChoices.emplaceBack(MSVNAME);
+        if(ui->actionNIPC->isChecked())selectedChoices.emplaceBack(NIPCNAME);
+        if(ui->actionZNCC->isChecked())selectedChoices.emplaceBack(ZNCCNAME);
+        if(ui->actionCorrelation->isChecked())selectedChoices.emplaceBack(CORRNAME);
+        if(ui->actionHomogeneity->isChecked())selectedChoices.emplaceBack(HOMONAME);
+        // taskEngine->ExecuteSelected(filePath, dirPath, selectedChoices);
+        if(selectedChoices.isEmpty()) {
+            QMessageBox::warning(this, "noChoice",
+                                 tr("haven't choose any processing method!"));
+            ui->pushButton_4->setEnabled(true);
+        }else session->start(refImg, files, dir, selectedChoices);
+    }
 }
 
 MainWindow::~MainWindow()

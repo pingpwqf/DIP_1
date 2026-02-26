@@ -5,10 +5,12 @@ QString CORRNAME = "GLCMcorr",
 
 // --- GLCM 及其优化实现 ---
 
-namespace GLCM {
+namespace GLCM
+{
 
     // 内部辅助：计算相位谱
-    static cv::UMat getPhaseSpecInternal(cv::InputArray src, int grayLevels) {
+    static cv::UMat getPhaseSpecInternal(cv::InputArray src, int grayLevels)
+    {
         cv::UMat fSrc;
         src.getUMat().convertTo(fSrc, CV_32F);
 
@@ -34,7 +36,8 @@ namespace GLCM {
         return phaseUint;
     }
 
-    std::shared_ptr<GLCmat> getPSGLCM(cv::InputArray img, int levels, int dx, int dy, ScaleStrategy strategy) {
+    std::shared_ptr<GLCmat> getPSGLCM(cv::InputArray img, int levels, int dx, int dy, ScaleStrategy strategy)
+    {
         cv::UMat processed;
         if (strategy == ScaleStrategy::ToPowerOfTwo) {
             int w = 1 << (int)std::floor(std::log2(img.cols()));
@@ -49,7 +52,8 @@ namespace GLCM {
         return std::make_shared<GLCmat>(phase, levels, dx, dy);
     }
 
-    GLCmat::GLCmat(cv::InputArray img, int levels, int dx, int dy) : m_levels(levels) {
+    GLCmat::GLCmat(cv::InputArray img, int levels, int dx, int dy) : m_levels(levels)
+    {
         cv::Mat mat = img.getMat();
         if (mat.type() != CV_8U) {
             double minV, maxV;
@@ -61,7 +65,8 @@ namespace GLCM {
         computeStatistics();
     }
 
-    void GLCmat::computeGLCM(const cv::Mat& img, int dx, int dy) {
+    void GLCmat::computeGLCM(const cv::Mat& img, int dx, int dy)
+    {
         m_glcm = cv::Mat::zeros(m_levels, m_levels, CV_32F);
 
         for (int y = 0; y < img.rows; ++y) {
@@ -85,7 +90,8 @@ namespace GLCM {
         if (sumVal > 1e-9) m_glcm /= sumVal;
     }
 
-    void GLCmat::computeStatistics() {
+    void GLCmat::computeStatistics()
+    {
         // 关键优化：使用 cv::reduce 快速计算边际分布
         cv::Mat pX, pY;
         cv::reduce(m_glcm, pY, 1, cv::REDUCE_SUM); // 对行求和 -> P(i)
@@ -107,7 +113,8 @@ namespace GLCM {
         }
     }
 
-    double GLCmat::getCorrelation() const {
+    double GLCmat::getCorrelation() const
+    {
         double cov = 0.0;
         for (int i = 0; i < m_levels; ++i) {
             const float* ptr = m_glcm.ptr<float>(i);
@@ -120,7 +127,8 @@ namespace GLCM {
         return (sigma > 1e-9) ? (cov / sigma) : 1.0; // 若方差为0，说明完全一致，相关性应为1而非0
     }
 
-    double GLCmat::getHomogeneity() const {
+    double GLCmat::getHomogeneity() const
+    {
         double homo = 0.0;
         for (int i = 0; i < m_levels; ++i) {
             const float* ptr = m_glcm.ptr<float>(i);
@@ -131,7 +139,8 @@ namespace GLCM {
         return homo;
     }
 
-    GLCMAlg::GLCMAlg(cv::InputArray img, int levels, int dx, int dy, ScaleStrategy strategy) {
+    GLCMAlg::GLCMAlg(cv::InputArray img, int levels, int dx, int dy, ScaleStrategy strategy)
+    {
         m_glcmPtr = getPSGLCM(img, levels, dx, dy, strategy);
         processInput = false;
     }

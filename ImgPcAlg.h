@@ -5,7 +5,6 @@
 #include <stdexcept>
 #include <QVector>
 #include <QString>
-#include <QDebug>
 
 extern QString MSVNAME,NIPCNAME,ZNCCNAME,
         CORRNAME,HOMONAME;
@@ -151,7 +150,6 @@ public:
     std::unique_ptr<AlgInterface> get(T a_name, cv::InputArray img){
         if(storage.find(a_name) != storage.end()) return storage[a_name](img);
         else {
-            qDebug() << "storage is full";
             return nullptr;
         }
     }
