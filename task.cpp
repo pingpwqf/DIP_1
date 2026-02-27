@@ -70,8 +70,9 @@ void ProcessingTask::run()
         }
     }
     catch (const std::exception& e) {
-        QMessageBox::warning(nullptr, "TaskError",
-                             tr(e.what()));
+        qDebug() << "TaskError:" << e.what();
+        // QMessageBox::warning(nullptr, "TaskError",
+        //                      tr(e.what()));
         emit resultsSkipped(m_algNames.size());
     }
     catch (...) {
@@ -220,9 +221,9 @@ void ResultCollector::handleResult(QString algName, QString fileName, double val
             m_streams[algName] = stream;
         } else {
             m_expectedResults--;
-            auto info = "Failed to open output file:" + fullPath;
-            QMessageBox::warning(nullptr, "fail",
-                                 tr(info.toLatin1()));
+            qDebug() << "Failed to open output file:" << fullPath;
+            // QMessageBox::warning(nullptr, "fail",
+            //                      tr(info.toLatin1()));
             return;
         }
     }

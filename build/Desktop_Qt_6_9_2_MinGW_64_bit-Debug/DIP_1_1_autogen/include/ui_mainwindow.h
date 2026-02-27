@@ -191,7 +191,7 @@ public:
         pushButton_3->setText(QCoreApplication::translate("MainWindow", "\345\217\226\346\266\210", nullptr));
         label->setText(QCoreApplication::translate("MainWindow", "\351\200\211\346\213\251\345\217\202\350\200\203\345\233\276\345\203\217", nullptr));
         label_2->setText(QCoreApplication::translate("MainWindow", "\351\200\211\346\213\251\345\233\276\345\203\217\346\226\207\344\273\266\345\244\271", nullptr));
-        label_3->setText(QCoreApplication::translate("MainWindow", "\345\217\202\350\200\203\345\233\276\345\203\217\346\230\276\347\244\272\357\274\232", nullptr));
+        label_3->setText(QCoreApplication::translate("MainWindow", "ROI\350\214\203\345\233\264\346\230\276\347\244\272\357\274\232", nullptr));
         pushButton->setText(QCoreApplication::translate("MainWindow", "...", nullptr));
         pushButton_2->setText(QCoreApplication::translate("MainWindow", "...", nullptr));
         pushButton_5->setText(QCoreApplication::translate("MainWindow", "...", nullptr));

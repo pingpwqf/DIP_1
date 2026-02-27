@@ -137,7 +137,10 @@ void MainWindow::MainExecute()
         QDir dir(dirPath);
         QStringList files = dir.entryList({"*.bmp", "*.png", "*.jpg"}, QDir::Files);
         cv::Mat refImg = imread_safe(filePath);
+        refImg = currentROI.width > 0 && currentROI.height > 0 ?
+                     refImg(currentROI).clone() : refImg;
 
+        selectedChoices.clear();
         if(ui->actionMSV->isChecked())selectedChoices.emplaceBack(MSVNAME);
         if(ui->actionNIPC->isChecked())selectedChoices.emplaceBack(NIPCNAME);
         if(ui->actionZNCC->isChecked())selectedChoices.emplaceBack(ZNCCNAME);
