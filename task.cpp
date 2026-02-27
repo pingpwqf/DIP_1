@@ -203,6 +203,7 @@ void ResultCollector::handleResult(QString algName, QString fileName, double val
 
     if (m_isAborted) {
         m_expectedResults--;
+        if (m_expectedResults <= 0) emit allResultsSaved();
         return;
     }
 

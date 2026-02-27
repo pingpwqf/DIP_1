@@ -128,7 +128,7 @@
      </rect>
     </property>
     <property name="text">
-     <string>参考图像显示：</string>
+     <string>ROI范围显示：</string>
     </property>
    </widget>
    <widget class="QPushButton" name="pushButton">

@@ -17,7 +17,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->pushButton, &QPushButton::clicked, this, &MainWindow::showFile);
     connect(ui->pushButton_2, &QPushButton::clicked, this, &MainWindow::showDir);
     connect(ui->pushButton_5, &QPushButton::clicked, this, &MainWindow::showOutDir);
-    connect(ui->actionROI, &QAction::toggled, this, &MainWindow::selectROI);
+    connect(ui->actionROI, &QAction::triggered, this, &MainWindow::selectROI);
     connect(ui->pushButton_3, &QPushButton::clicked, this, [this](){
         ui->pushButton_4->setEnabled(true);
         if (taskEngine) {
@@ -74,39 +74,39 @@ void MainWindow::showOutDir()
 
 void MainWindow::selectROI()
 {
-    if (ui->actionROI->isChecked()) {
-        if (filePath.isEmpty()) {
-            QMessageBox::warning(this, "NoRef", tr("haven't select a reference image!"));
-            return;
-        }
 
-        // 1. 加载参考图并转换为 QImage
-        cv::Mat ref = imread_safe(filePath);
-        QImage qimg(ref.data, ref.cols, ref.rows, ref.step, QImage::Format_Grayscale8);
-
-        // 2. 弹出 ROI 窗口
-        ROI roiDlg(qimg, this);
-        roiDlg.show();
-        if (roiDlg.exec() == QDialog::Accepted) {
-            QRect r = roiDlg.getSelectedRect();
-
-            // 3. 将 QRect 转换为 cv::Rect
-            cv::Rect cvROI(r.x(), r.y(), r.width(), r.height());
-
-            // 4. 在主界面预览 ROI 区域
-            cv::Mat croppedRef = ref(cvROI).clone();
-            QImage qPreview(croppedRef.data,croppedRef.cols,croppedRef.rows,
-                            croppedRef.step,QImage::Format_Grayscale8); // 转换为QImage
-
-            QGraphicsScene* scene = new QGraphicsScene(this);
-            scene->addPixmap(QPixmap::fromImage(qPreview));
-            ui->graphicsView->setScene(scene);
-            ui->graphicsView->fitInView(scene->itemsBoundingRect(), Qt::KeepAspectRatio);
-
-            // 5. 保存这个 cvROI，后续传入 TaskManager
-            this->currentROI = cvROI;
-        }
+    if (filePath.isEmpty()) {
+        QMessageBox::warning(this, "NoRef", tr("haven't select a reference image!"));
+        return;
     }
+
+    // 1. 加载参考图并转换为 QImage
+    cv::Mat ref = imread_safe(filePath);
+    QImage qimg(ref.data, ref.cols, ref.rows, ref.step, QImage::Format_Grayscale8);
+
+    // 2. 弹出 ROI 窗口
+    ROI roiDlg(qimg, this);
+    roiDlg.show();
+    if (roiDlg.exec() == QDialog::Accepted) {
+        QRect r = roiDlg.getSelectedRect();
+
+        // 3. 将 QRect 转换为 cv::Rect
+        cv::Rect cvROI(r.x(), r.y(), r.width(), r.height());
+
+        // 4. 在主界面预览 ROI 区域
+        cv::Mat croppedRef = ref(cvROI).clone();
+        QImage qPreview(croppedRef.data,croppedRef.cols,croppedRef.rows,
+                        croppedRef.step,QImage::Format_Grayscale8); // 转换为QImage
+
+        QGraphicsScene* scene = new QGraphicsScene(this);
+        scene->addPixmap(QPixmap::fromImage(qPreview));
+        ui->graphicsView->setScene(scene);
+        ui->graphicsView->fitInView(scene->itemsBoundingRect(), Qt::KeepAspectRatio);
+
+        // 5. 保存这个 cvROI，后续传入 TaskManager
+        this->currentROI = cvROI;
+    }
+
 }
 
 void MainWindow::MainExecute()

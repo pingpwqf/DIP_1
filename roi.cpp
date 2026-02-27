@@ -3,16 +3,18 @@
 #include <QEvent>
 #include <QPushButton>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QGraphicsRectItem>
 
 ROI::ROI(const QImage& image, QWidget* parent)
     :QDialog(parent), m_roiRectItem(nullptr), m_isDrawing(false)
 {
     setWindowTitle(tr("请划取 ROI 区域 (左键拖动)"));
-    setMinimumSize(800, 600);
+    setMinimumSize(400, 300);
 
     // 1. UI 布局
     QVBoxLayout* layout = new QVBoxLayout(this);
+    QHBoxLayout* btnLayout = new QHBoxLayout(this);
     m_view = new QGraphicsView(this);
     m_scene = new QGraphicsScene(this);
     m_view->setScene(m_scene);
@@ -23,8 +25,12 @@ ROI::ROI(const QImage& image, QWidget* parent)
     layout->addWidget(m_view);
 
     QPushButton* okBtn = new QPushButton(tr("确定"), this);
+    QPushButton* cancelBtn = new QPushButton(tr("取消"), this);
     connect(okBtn, &QPushButton::clicked, this, &QDialog::accept);
-    layout->addWidget(okBtn);
+    connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
+    btnLayout->addWidget(okBtn);
+    btnLayout->addWidget(cancelBtn);
+    layout->addLayout(btnLayout);
 
     // 2. 安装事件过滤器，捕获视图上的鼠标动作
     m_view->viewport()->installEventFilter(this);
@@ -39,10 +45,10 @@ bool ROI::eventFilter(QObject *obj, QEvent *event)
             mousePressEvent(mouseEvent);
             return true;
         case QEvent::MouseMove:
-            mousePressEvent(mouseEvent);
+            mouseMoveEvent(mouseEvent);
             return true;
         case QEvent::MouseButtonRelease:
-            mousePressEvent(mouseEvent);
+            mouseReleaseEvent(mouseEvent);
             return true;
         default:
             break;
@@ -97,7 +103,7 @@ void ROI::mouseReleaseEvent(QMouseEvent* event)
         m_isDrawing = false;
         if (m_roiRectItem) {
             // 保存最终的矩形区域（转换为整数像素坐标）
-            m_finalRect = m_roiRectItem->rect().toRect();
+            m_finalRect = m_roiRectItem->rect().toRect().intersected(m_pixmapItem->pixmap().rect());
 
             // 可以在释放时把虚线变实线，表示选定
             m_roiRectItem->setPen(QPen(Qt::red, 2, Qt::SolidLine));
