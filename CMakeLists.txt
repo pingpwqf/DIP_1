@@ -3,6 +3,7 @@ project(DIP_1_1 LANGUAGES CXX)
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets)
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Core)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs)
 
 qt_standard_project_setup()
@@ -17,6 +18,8 @@ qt_add_executable(DIP_1_1
     ImgPcAlg.cpp
     ImgPcAlg_2.cpp
     task.h task.cpp
+    roi.h roi.cpp
+
 
 
 )
@@ -28,6 +31,7 @@ target_link_libraries(DIP_1_1
         ${OpenCV_LIBS}
 )
 target_link_libraries(DIP_1_1 PRIVATE Qt6::Widgets)
+target_link_libraries(DIP_1_1 PRIVATE Qt6::Core)
 
 target_include_directories(DIP_1_1
     PRIVATE

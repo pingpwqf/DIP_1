@@ -21,6 +21,7 @@ private:
     Ui::MainWindow *ui;
     QString filePath, dirPath, dirOutPath;
     QStringList inFileList, outFileList;
+    cv::Rect currentROI;
 
     QVector<QString> selectedChoices;
     ResultCollector collector;

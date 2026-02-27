@@ -46,6 +46,7 @@ signals:
     void allResultsSaved();
 };
 
+/*************************************************/
 class ProcessingSession;
 // 具体的处理任务
 class ProcessingTask : public QObject, public QRunnable {
@@ -59,9 +60,11 @@ public:
 
     void run() override;
     void setSession(ProcessingSession* sessionptr) {m_sessionHandle = sessionptr;}
+    void setROI(cv::Rect roi) {m_roi = roi;}
 
 private:
     ProcessingSession* m_sessionHandle;
+    cv::Rect m_roi;
 
     QString m_path;
     QVector<QString> m_algNames;
@@ -74,6 +77,7 @@ signals:
     void resultsSkipped(unsigned size);
 };
 
+/****************************************************/
 class ProcessingSession : public QObject {
     Q_OBJECT
 public:
@@ -81,6 +85,7 @@ public:
         : QObject(parent), m_collector(rc), m_activeTasks(0), m_totalTasks(0) {}
 
     void start(const cv::Mat& refImg, const QStringList& files, const QDir& dir, const QVector<QString>& algs);
+    void setROI(cv::Rect roi) { roi4Task = roi; }
     bool IsCancelled() const {return m_isCancelled.load();}
 signals:
     void sessionFinished(); // 整个批处理完成
@@ -96,6 +101,7 @@ private:
     std::atomic<bool> m_isCancelled{false};
 
     ResultCollector* m_collector;
+    cv::Rect roi4Task;
     int m_activeTasks;
     int m_totalTasks;
 };

@@ -25,7 +25,16 @@ void ProcessingTask::run()
     }
 
     try {
-        cv::Mat img = imread_safe(m_path);
+        cv::Mat fullImg = imread_safe(m_path);
+        if (fullImg.empty()) return;
+
+        // --- 核心改动：应用 ROI ---
+        cv::Mat img;
+        if (m_roi.width > 0 && m_roi.height > 0) {
+            img = fullImg(m_roi).clone(); // 只处理 ROI 区域
+        } else {
+            img = fullImg;
+        }
         if (img.empty()) {
             emit resultsSkipped(m_algNames.size());
             emit finished();
@@ -99,6 +108,7 @@ void ProcessingSession::start(const cv::Mat& refImg, const QStringList& files, c
 
         ProcessingTask* task = new ProcessingTask(dir.absoluteFilePath(fileName), algs, refImg);
         task->setSession(this);
+        task->setROI(roi4Task);
         connect(task, &ProcessingTask::resultReady, m_collector, &ResultCollector::handleResult);
         // 如果任务内部失败，也要同步计数
         connect(task, &ProcessingTask::resultsSkipped, m_collector, &ResultCollector::decrementExpectedCount);
