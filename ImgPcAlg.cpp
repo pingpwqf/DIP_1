@@ -4,6 +4,8 @@ QString MSVNAME = "MSV",
     NIPCNAME = "NIPC",
     ZNCCNAME = "ZNCC";
 
+const int factor = 1;
+
 PreTreatClass<PreTreatMethod::Classic> globalScheme;
 const double threshold = 0.02;
 
@@ -70,12 +72,12 @@ NIPCAlg::NIPCAlg(cv::InputArray img, int f) : BaseAlg(img, f) {
 
 double NIPCAlg::process(cv::InputArray input) const {
     ensureInputNotEmpty(input);
-    cv::UMat inDown;
+    cv::UMat downInput;
     cv::UMat img = prepareInput(input);
-    downsample(preTreat(img), inDown);
-    double inNorm = cv::norm(inDown, cv::NORM_L2);
+    downsample(preTreat(img), downInput);
+    double inNorm = cv::norm(downInput, cv::NORM_L2);
     if (inNorm < 1e-9) return 0.0;
-    return m_downRef.dot(inDown) / (m_refNorm * inNorm);
+    return m_downRef.dot(downInput) / (m_refNorm * inNorm);
 }
 
 // ZNCC: 零均值归一化互相关 (优化 GPU 提取分数)

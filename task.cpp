@@ -48,25 +48,28 @@ void ProcessingTask::run()
         bool needsGlcm = m_algNames.contains(CORRNAME) || m_algNames.contains(HOMONAME);
 
         if (needsGlcm) {
-            sharedGlcm = GLCM::getPSGLCM(img, 32, 1, 0, ScaleStrategy::ToPowerOfTwo);
+            sharedGlcm = GLCM::getPSGLCM(img, 32, 1, 0);
         }
 
         for (const QString& algName : m_algNames) {
             if (m_sessionHandle && m_sessionHandle->IsCancelled()) break;
 
-            if(m_sessionHandle->IsCancelled()) return;
-            double val = 0;
-            if (algName == CORRNAME && sharedGlcm) {
-                val = sharedGlcm->getCorrelation();
+            // if(m_sessionHandle->IsCancelled()) return;
+            std::unique_ptr<AlgInterface> alg;
+
+            // 如果是 GLCM 类算法且有缓存
+            if ((algName == CORRNAME || algName == HOMONAME) && sharedGlcm) {
+                if (algName == CORRNAME) alg = std::make_unique<GLCM::GLCMcorrAlg>(sharedGlcm);
+                else alg = std::make_unique<GLCM::GLCMhomoAlg>(sharedGlcm);
+            } else {
+                // 普通算法通过注册机获取
+                alg = AlgRegistry<QString>::instance().get(algName, m_refImg);
             }
-            else if (algName == HOMONAME && sharedGlcm) {
-                val = sharedGlcm->getHomogeneity();
+
+            if (alg) {
+                double val = alg->process(img); // 统一调用！
+                emit resultReady(algName, fileName, val);
             }
-            else {
-                auto alg = AlgRegistry<QString>::instance().get(algName, m_refImg);
-                if (alg) val = alg->process(img);
-            }
-            emit resultReady(algName, fileName, val);
         }
     }
     catch (const std::exception& e) {

@@ -40,12 +40,12 @@ MainWindow::MainWindow(QWidget *parent)
     AlgRegistry<QString>::instance().Register(ZNCCNAME, [](cv::InputArray img){
         return std::make_unique<ZNCCAlg>(img);
     });
-    AlgRegistry<QString>::instance().Register(CORRNAME, [](cv::InputArray img){
-        return std::make_unique<GLCM::GLCMcorrAlg>(img);
-    });
-    AlgRegistry<QString>::instance().Register(HOMONAME, [](cv::InputArray img){
-        return std::make_unique<GLCM::GLCMhomoAlg>(img);
-    });
+    // AlgRegistry<QString>::instance().Register(CORRNAME, [](cv::InputArray img){
+    //     return std::make_unique<GLCM::GLCMcorrAlg>(img);
+    // });
+    // AlgRegistry<QString>::instance().Register(HOMONAME, [](cv::InputArray img){
+    //     return std::make_unique<GLCM::GLCMhomoAlg>(img);
+    // });
 
     connect(ui->pushButton_4, &QPushButton::clicked,
             this, &MainWindow::MainExecute);
@@ -82,7 +82,7 @@ void MainWindow::selectROI()
 
     // 1. 加载参考图并转换为 QImage
     cv::Mat ref = imread_safe(filePath);
-    QImage qimg(ref.data, ref.cols, ref.rows, ref.step, QImage::Format_Grayscale8);
+    QImage qimg = QImage(ref.data, ref.cols, ref.rows, ref.step, QImage::Format_Grayscale8).copy();
 
     // 2. 弹出 ROI 窗口
     ROI roiDlg(qimg, this);

@@ -9,46 +9,52 @@ namespace GLCM
 {
 
     // 内部辅助：计算相位谱
-    static cv::UMat getPhaseSpecInternal(cv::InputArray src, int grayLevels)
-    {
-        cv::UMat fSrc;
-        src.getUMat().convertTo(fSrc, CV_32F);
+static cv::UMat getPhaseSpecInternal(cv::InputArray src, int grayLevels, PaddingStrategy strategy)
+{
+    cv::UMat fSrc;
+    src.getUMat().convertTo(fSrc, CV_32F);
 
-        int w = cv::getOptimalDFTSize(fSrc.cols);
-        int h = cv::getOptimalDFTSize(fSrc.rows);
+    cv::UMat complexImg;
+    if (strategy == PaddingStrategy::ToOptimalDFT) {
+        // 获取最优尺寸（2, 3, 5 的倍数）
+        int optW = cv::getOptimalDFTSize(fSrc.cols);
+        int optH = cv::getOptimalDFTSize(fSrc.rows);
+
         cv::UMat padded;
-        cv::copyMakeBorder(fSrc, padded, 0, h - fSrc.rows, 0, w - fSrc.cols, cv::BORDER_CONSTANT, cv::Scalar::all(0));
-
-        cv::UMat complexImg;
+        // 采用零填充，BORDER_CONSTANT 保证不引入人为的边缘插值
+        cv::copyMakeBorder(fSrc, padded, 0, optH - fSrc.rows, 0, optW - fSrc.cols,
+                           cv::BORDER_CONSTANT, cv::Scalar::all(0));
         cv::dft(padded, complexImg, cv::DFT_COMPLEX_OUTPUT);
-
-        std::vector<cv::UMat> planes;
-        cv::split(complexImg, planes);
-        cv::UMat phase;
-        cv::phase(planes[0], planes[1], phase);
-
-        phase = phase(cv::Rect(0, 0, fSrc.cols, fSrc.rows));
-        // 映射到灰度级
-        cv::normalize(phase, phase, 0, grayLevels - 1, cv::NORM_MINMAX);
-
-        cv::UMat phaseUint;
-        phase.convertTo(phaseUint, CV_8U);
-        return phaseUint;
+    } else {
+        cv::dft(fSrc, complexImg, cv::DFT_COMPLEX_OUTPUT);
     }
 
-    std::shared_ptr<GLCmat> getPSGLCM(cv::InputArray img, int levels, int dx, int dy, ScaleStrategy strategy)
-    {
-        cv::UMat processed;
-        if (strategy == ScaleStrategy::ToPowerOfTwo) {
-            int w = 1 << (int)std::floor(std::log2(img.cols()));
-            int h = 1 << (int)std::floor(std::log2(img.rows()));
-            cv::resize(img, processed, cv::Size(std::max(16, w), std::max(16, h)), 0, 0, cv::INTER_AREA);
-        }
-        else {
-            processed = img.getUMat();
-        }
+    std::vector<cv::UMat> planes;
+    cv::split(complexImg, planes);
 
-        cv::UMat phase = getPhaseSpecInternal(processed, levels);
+    cv::UMat phase;
+    cv::phase(planes[0], planes[1], phase);
+
+    // 【关键改进】在归一化和灰度映射前，先裁切回原始有效区域
+    // 这样可以避免填充区的 0 值参与 minMax 统计，从而导致相位压缩
+    phase = phase(cv::Rect(0, 0, fSrc.cols, fSrc.rows));
+
+    // 映射到指定的灰度级 [0, levels-1]
+    cv::normalize(phase, phase, 0, grayLevels - 1, cv::NORM_MINMAX);
+
+    cv::UMat phaseUint;
+    phase.convertTo(phaseUint, CV_8U);
+    return phaseUint;
+}
+
+    std::shared_ptr<GLCmat> getPSGLCM(cv::InputArray img, int levels, int dx, int dy, PaddingStrategy strategy)
+    {
+        cv::UMat processed = img.getUMat();
+
+        // 计算相位谱图像
+        cv::UMat phase = getPhaseSpecInternal(processed, levels, strategy);
+
+        // 构造 GLCM 矩阵
         return std::make_shared<GLCmat>(phase, levels, dx, dy);
     }
 
@@ -139,9 +145,8 @@ namespace GLCM
         return homo;
     }
 
-    GLCMAlg::GLCMAlg(cv::InputArray img, int levels, int dx, int dy, ScaleStrategy strategy)
+    GLCMAlg::GLCMAlg(cv::InputArray img, int levels, int dx, int dy, PaddingStrategy strategy)
     {
         m_glcmPtr = getPSGLCM(img, levels, dx, dy, strategy);
-        processInput = false;
     }
 }
