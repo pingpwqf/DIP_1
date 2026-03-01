@@ -59,9 +59,10 @@ MainWindow::MainWindow(QWidget *parent)
 
 void MainWindow::showFile()
 {
-    filePath = QFileDialog::getOpenFileName(this, tr("Open Image"),"/",
+    QString newPath = QFileDialog::getOpenFileName(this, tr("Open Image"),"/",
                                              tr("Image Files (*.bmp *.png)"));
-    if (!filePath.isEmpty()) {
+    if (!newPath.isEmpty()) {
+        filePath = newPath;
         ui->fileLineEdit->setText(filePath);
 
         // 关键点：用户选了新图，直接清空预览区域
@@ -115,7 +116,7 @@ void MainWindow::selectROI()
         QImage qPreview(croppedRef.data,croppedRef.cols,croppedRef.rows,
                         croppedRef.step,QImage::Format_Grayscale8); // 转换为QImage
 
-
+        myScene->clear();
         myScene->addPixmap(QPixmap::fromImage(qPreview));
         ui->graphicsView->fitInView(myScene->itemsBoundingRect(), Qt::KeepAspectRatio);
 
