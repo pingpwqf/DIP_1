@@ -8,12 +8,19 @@
 // 辅助函数：处理 OpenCV 在 Windows 下的中文路径读取问题
 cv::Mat imread_safe(const QString& path)
 {
-#ifdef Q_OS_WIN
-    // Windows 下使用特殊处理确保中文路径可用
-    return cv::imread(path.toLocal8Bit().constData(), cv::IMREAD_GRAYSCALE);
-#else
-    return cv::imread(path.toUtf8().data(), cv::IMREAD_GRAYSCALE);
-#endif
+    // 1. 使用 QFile 读取二进制数据，Qt 会自动处理各种平台的路径编码（包括 Windows 的 UTF-16）
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) { return cv::Mat(); }
+
+    QByteArray data = file.readAll();
+    file.close();
+
+    // 2. 将 QByteArray 转换为 std::vector<uchar>
+    std::vector<uchar> buffer(data.begin(), data.end());
+
+    // 3. 使用 imdecode 从内存中解码图像
+    // 这种方式完全避开了 OpenCV 对文件路径字符串的平台差异处理
+    return cv::imdecode(buffer, cv::IMREAD_GRAYSCALE);
 }
 
 void ProcessingTask::run()
