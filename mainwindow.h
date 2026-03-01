@@ -4,6 +4,8 @@
 #include <QMainWindow>
 #include "task.h"
 
+class QGraphicsScene;
+
 QT_BEGIN_NAMESPACE
 namespace Ui {
 class MainWindow;
@@ -22,6 +24,7 @@ private:
     QString filePath, dirPath, dirOutPath;
     QStringList inFileList, outFileList;
     cv::Rect currentROI;
+    QGraphicsScene* myScene;
 
     QVector<QString> selectedChoices;
     ResultCollector collector;

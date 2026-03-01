@@ -13,6 +13,12 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     taskEngine = std::make_unique<TaskManager>(&collector);
+    myScene = new QGraphicsScene(this);
+    ui->graphicsView->setScene(myScene);
+
+    int idealThreadCount = QThread::idealThreadCount();
+    int maxThreads = qMax(2, idealThreadCount / 2);
+    QThreadPool::globalInstance()->setMaxThreadCount(maxThreads);
 
     connect(ui->pushButton, &QPushButton::clicked, this, &MainWindow::showFile);
     connect(ui->pushButton_2, &QPushButton::clicked, this, &MainWindow::showDir);
@@ -21,7 +27,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(ui->pushButton_3, &QPushButton::clicked, this, [this](){
         ui->pushButton_4->setEnabled(true);
         if (taskEngine) {
-            auto canc = QMessageBox::warning(this, "cancel", "stop processing！");
+            ui->statusbar->showMessage(tr("正在取消"), 1000);
         } else {
             // 若未运行，则执行重置逻辑：清空路径
             ui->fileLineEdit->clear();
@@ -55,7 +61,18 @@ void MainWindow::showFile()
 {
     filePath = QFileDialog::getOpenFileName(this, tr("Open Image"),"/",
                                              tr("Image Files (*.bmp *.png)"));
-    ui->fileLineEdit->setText(filePath);
+    if (!filePath.isEmpty()) {
+        ui->fileLineEdit->setText(filePath);
+
+        // 关键点：用户选了新图，直接清空预览区域
+        if (myScene) {
+            myScene->clear();
+            // 如果你想彻底重置，甚至可以 setScene(nullptr)
+        }
+
+        // 同时记得重置你保存的 ROI 变量，防止用户用旧 ROI 算新图
+        this->currentROI = cv::Rect();
+    }
 }
 
 void MainWindow::showDir()
@@ -98,10 +115,9 @@ void MainWindow::selectROI()
         QImage qPreview(croppedRef.data,croppedRef.cols,croppedRef.rows,
                         croppedRef.step,QImage::Format_Grayscale8); // 转换为QImage
 
-        QGraphicsScene* scene = new QGraphicsScene(this);
-        scene->addPixmap(QPixmap::fromImage(qPreview));
-        ui->graphicsView->setScene(scene);
-        ui->graphicsView->fitInView(scene->itemsBoundingRect(), Qt::KeepAspectRatio);
+
+        myScene->addPixmap(QPixmap::fromImage(qPreview));
+        ui->graphicsView->fitInView(myScene->itemsBoundingRect(), Qt::KeepAspectRatio);
 
         // 5. 保存这个 cvROI，后续传入 TaskManager
         this->currentROI = cvROI;

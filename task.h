@@ -9,8 +9,7 @@
 #include <QSharedPointer>
 #include <QDir>
 #include <QMutex>
-
-#include "ImgPcAlg.h"
+#include <opencv2/opencv.hpp>
 
 cv::Mat imread_safe(const QString& path);
 
@@ -54,16 +53,16 @@ class ProcessingTask : public QObject, public QRunnable {
 public:
     // 传递算法名称和参考图，而不是直接传递算法实例，以保证线程安全
     ProcessingTask(QString imgPath, QVector<QString> algNames, cv::Mat refImg)
-        : m_path(imgPath), m_algNames(algNames), m_refImg(refImg), m_sessionHandle(nullptr) {
+        : m_path(imgPath), m_algNames(algNames), m_refImg(refImg) {
         setAutoDelete(true);
     }
 
     void run() override;
-    void setSession(ProcessingSession* sessionptr) {m_sessionHandle = sessionptr;}
+    void setPCancelled(std::shared_ptr<std::atomic<bool>> pFlag) {m_pCancelled = pFlag;}
     void setROI(cv::Rect roi) {m_roi = roi;}
 
 private:
-    ProcessingSession* m_sessionHandle;
+    std::shared_ptr<std::atomic<bool>> m_pCancelled = nullptr;
     cv::Rect m_roi;
 
     QString m_path;
@@ -82,11 +81,14 @@ class ProcessingSession : public QObject {
     Q_OBJECT
 public:
     explicit ProcessingSession(ResultCollector* rc, QObject* parent = nullptr)
-        : QObject(parent), m_collector(rc), m_activeTasks(0), m_totalTasks(0) {}
+        : QObject(parent), m_collector(rc), m_activeTasks(0), m_totalTasks(0)
+    {
+        m_pCancelled = std::make_shared<std::atomic<bool>>(false);
+    }
 
     void start(const cv::Mat& refImg, const QStringList& files, const QDir& dir, const QVector<QString>& algs);
     void setROI(cv::Rect roi) { roi4Task = roi; }
-    bool IsCancelled() const {return m_isCancelled.load();}
+    std::shared_ptr<std::atomic<bool>> getPCancelled() const {return m_pCancelled;}
 signals:
     void sessionFinished(); // 整个批处理完成
     void progressUpdated(int current, int total); // 可选：进度条支持
@@ -98,7 +100,7 @@ public slots:
     void cancel();
 
 private:
-    std::atomic<bool> m_isCancelled{false};
+    std::shared_ptr<std::atomic<bool>> m_pCancelled;
 
     ResultCollector* m_collector;
     cv::Rect roi4Task;

@@ -5,6 +5,8 @@
 #include <QCoreApplication>
 #include <QMessageBox>
 
+#include "ImgPcAlg.h"
+
 // 辅助函数：处理 OpenCV 在 Windows 下的中文路径读取问题
 cv::Mat imread_safe(const QString& path)
 {
@@ -25,7 +27,7 @@ cv::Mat imread_safe(const QString& path)
 
 void ProcessingTask::run()
 {
-    if (m_sessionHandle && m_sessionHandle->IsCancelled()) {
+    if (m_pCancelled && m_pCancelled->load()) {
         emit resultsSkipped(m_algNames.size());
         emit finished();
         return;
@@ -33,7 +35,11 @@ void ProcessingTask::run()
 
     try {
         cv::Mat fullImg = imread_safe(m_path);
-        if (fullImg.empty()) return;
+        if (fullImg.empty()) {
+            emit resultsSkipped(m_algNames.size());
+            emit finished();
+            return;
+        }
 
         // --- 核心改动：应用 ROI ---
         cv::Mat img;
@@ -59,11 +65,9 @@ void ProcessingTask::run()
         }
 
         for (const QString& algName : m_algNames) {
-            if (m_sessionHandle && m_sessionHandle->IsCancelled()) break;
+            if (m_pCancelled && m_pCancelled->load()) break;
 
-            // if(m_sessionHandle->IsCancelled()) return;
             std::unique_ptr<AlgInterface> alg;
-
             // 如果是 GLCM 类算法且有缓存
             if ((algName == CORRNAME || algName == HOMONAME) && sharedGlcm) {
                 if (algName == CORRNAME) alg = std::make_unique<GLCM::GLCMcorrAlg>(sharedGlcm);
@@ -110,7 +114,7 @@ void ProcessingSession::start(const cv::Mat& refImg, const QStringList& files, c
     m_collector->resetExpectedCount(m_totalTasks * algs.size());
 
     for (const QString& fileName : files) {
-        if(m_isCancelled.load()) {
+        if(m_pCancelled->load()) {
             // 补偿未提交任务的计数，确保 activeTasks 最终能归零
             m_activeTasks--;
             m_collector->decrementExpectedCount(algs.size());
@@ -118,7 +122,7 @@ void ProcessingSession::start(const cv::Mat& refImg, const QStringList& files, c
         }
 
         ProcessingTask* task = new ProcessingTask(dir.absoluteFilePath(fileName), algs, refImg);
-        task->setSession(this);
+        task->setPCancelled(m_pCancelled);
         task->setROI(roi4Task);
         connect(task, &ProcessingTask::resultReady, m_collector, &ResultCollector::handleResult);
         // 如果任务内部失败，也要同步计数
@@ -126,6 +130,7 @@ void ProcessingSession::start(const cv::Mat& refImg, const QStringList& files, c
         connect(task, &ProcessingTask::finished, this, &ProcessingSession::onTaskFinished);
         QThreadPool::globalInstance()->start(task);
     }
+    if (m_activeTasks <= 0) { emit sessionFinished(); }
 }
 
 void ProcessingSession::onTaskFinished()
@@ -138,7 +143,8 @@ void ProcessingSession::onTaskFinished()
 
 void ProcessingSession::cancel()
 {
-    m_isCancelled = true;
+    if(m_pCancelled) m_pCancelled->store(true);
+
     if (m_collector) {
         m_collector->abort(); // 立即强行释放文件句柄
     }
@@ -155,6 +161,9 @@ void ResultCollector::setOutputDir(QString path)
 
 void ResultCollector::prepare()
 {
+    m_isAborted = false; // <--- 关键：重置幽灵状态
+    m_expectedResults = 0; // 确保计数器也是干净的
+
     closeAll();
     if (!m_outputDir.isEmpty()) {
         QDir dir;
@@ -188,8 +197,8 @@ void ResultCollector::abort()
 {
     QMutexLocker locker(&m_mutex);
     m_isAborted = true;
-    m_expectedResults = 0; // 清空预期，防止后续 handleResult 继续工作
-    closeAll();            // 立即关闭所有文件句柄
+    // m_expectedResults = 0; // 清空预期，防止后续 handleResult 继续工作
+    // closeAll();            // 立即关闭所有文件句柄
 }
 
 void ResultCollector::resetExpectedCount(int count)
